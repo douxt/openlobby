@@ -4,6 +4,7 @@ import type {
   ChannelProviderConfig,
   OutboundChannelMessage,
   CommandGroup,
+  ChannelPeerKind,
 } from '@openlobby/core';
 import {
   TelegramBotApi,
@@ -443,6 +444,8 @@ export class TelegramBotProvider implements ChannelProvider {
 
     if (!text && attachments.length === 0) return;
 
+    const peerKind = mapChatTypeToPeerKind(message.chat.type);
+
     this.router.handleInbound({
       externalMessageId: String(message.message_id),
       identity: {
@@ -450,6 +453,7 @@ export class TelegramBotProvider implements ChannelProvider {
         accountId: this.accountId,
         peerId,
         peerDisplayName: displayName,
+        peerKind,
       },
       text,
       timestamp: message.date * 1000,
@@ -479,6 +483,7 @@ export class TelegramBotProvider implements ChannelProvider {
     if (query.data) {
       // Resolve possibly-shortened callback data back to original
       const resolvedData = this.resolveCallback(query.data);
+      const peerKind = mapChatTypeToPeerKind(query.message?.chat.type);
       this.router.handleInbound({
         externalMessageId: query.id,
         identity: {
@@ -486,6 +491,7 @@ export class TelegramBotProvider implements ChannelProvider {
           accountId: this.accountId,
           peerId,
           peerDisplayName: displayName,
+          peerKind,
         },
         text: '',
         timestamp: Date.now(),
@@ -723,5 +729,24 @@ export class TelegramBotProvider implements ChannelProvider {
     for (const [key, ts] of this.seenMessages) {
       if (ts < cutoff) this.seenMessages.delete(key);
     }
+  }
+}
+
+/**
+ * Map Telegram's `chat.type` to OpenLobby's `ChannelPeerKind`.
+ * The Telegram Bot API always emits lowercase literals.
+ * Unknown or missing values fall back to `'direct'` as a safe default.
+ */
+function mapChatTypeToPeerKind(chatType: string | undefined): ChannelPeerKind {
+  switch (chatType) {
+    case 'private':
+      return 'direct';
+    case 'group':
+    case 'supergroup':
+      return 'group';
+    case 'channel':
+      return 'channel';
+    default:
+      return 'direct';
   }
 }

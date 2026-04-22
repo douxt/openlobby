@@ -6,6 +6,7 @@ import type {
   ChannelProviderConfig,
   OutboundChannelMessage,
   CommandGroup,
+  ChannelPeerKind,
 } from '@openlobby/core';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -135,7 +136,7 @@ export class WeComBotProvider implements ChannelProvider {
           channelName: 'wecom',
           accountId: this.accountId,
           peerId,
-          peerKind: 'direct',
+          peerKind: mapWeComChatTypeToPeerKind(body.chattype),
         },
         text: messageText,
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -164,7 +165,7 @@ export class WeComBotProvider implements ChannelProvider {
           channelName: 'wecom',
           accountId: this.accountId,
           peerId,
-          peerKind: 'direct',
+          peerKind: mapWeComChatTypeToPeerKind(body.chattype),
         },
         text: body.voice.content || '[语音消息]',
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -203,7 +204,7 @@ export class WeComBotProvider implements ChannelProvider {
           channelName: 'wecom',
           accountId: this.accountId,
           peerId,
-          peerKind: 'direct',
+          peerKind: mapWeComChatTypeToPeerKind(body.chattype),
         },
         text: '[图片]',
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -248,7 +249,7 @@ export class WeComBotProvider implements ChannelProvider {
           channelName: 'wecom',
           accountId: this.accountId,
           peerId,
-          peerKind: 'direct',
+          peerKind: mapWeComChatTypeToPeerKind(body.chattype),
         },
         text: text || '[图文消息]',
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -286,7 +287,7 @@ export class WeComBotProvider implements ChannelProvider {
             channelName: 'wecom',
             accountId: this.accountId,
             peerId,
-            peerKind: 'direct',
+            peerKind: mapWeComChatTypeToPeerKind(body.chattype),
           },
           text: '',
           timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -659,6 +660,28 @@ function parseMediaDirectives(text: string): {
     return '';
   }).trim();
   return { cleanText, mediaPaths };
+}
+
+/**
+ * Map the WeCom callback body's `chattype` to OpenLobby's `ChannelPeerKind`.
+ *
+ * WeCom's bot webhook body carries `chattype: 'single' | 'group'` on every
+ * BaseMessage (see @wecom/aibot-node-sdk). For group chats `chatid` is also
+ * present. WeCom has no analogue of Telegram's broadcast "channel" peer, so
+ * we only map to 'direct' or 'group'. Unknown/missing values default to
+ * 'direct' as a safe fallback.
+ *
+ * Note: even though we populate peerKind correctly here, the current peerId
+ * for group messages is still `body.from.userid`. If/when we want per-group
+ * isolation in Agent mode, peerId for groups should likely be `body.chatid`
+ * — that's a separate concern from this peerKind wiring.
+ */
+function mapWeComChatTypeToPeerKind(
+  chatType: unknown,
+): ChannelPeerKind {
+  if (chatType === 'group') return 'group';
+  // 'single' and anything unexpected fall back to 'direct'
+  return 'direct';
 }
 
 /** Split text into chunks that fit within byte limit */
