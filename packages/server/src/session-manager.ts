@@ -572,6 +572,7 @@ export class SessionManager {
     options: SpawnOptions,
     displayName: string,
     origin: 'lobby' | 'cli' | 'lobby-manager' = 'lobby',
+    extras?: { agentId?: string; channelIdentity?: ChannelIdentity },
   ): Promise<ManagedSession> {
     const adapter = this.adapters.get(adapterName);
     if (!adapter) throw new Error(`Adapter "${adapterName}" not found`);
@@ -590,6 +591,8 @@ export class SessionManager {
       messageMode: (options as { messageMode?: MessageMode }).messageMode,
       allowedTools: options.allowedTools,
       deniedTools: options.deniedTools,
+      agentId: extras?.agentId,
+      channelIdentity: extras?.channelIdentity,
       broadcastUpdate: false,
     });
 
@@ -679,9 +682,38 @@ export class SessionManager {
       const existing = this.sessions.get(existingId);
       if (existing) {
         if (existing.status === 'stopped' || existing.status === 'error') {
-          // Dead process — drop index entry and fall through to spawn a fresh one.
-          this.sessions.delete(existing.id);
+          // Dead process — resume the underlying CLI session so conversation
+          // history on disk (JSONL) is preserved. Drop the stale in-memory
+          // ManagedSession first; resumeSession will re-register via
+          // registerManagedSession with the same sessionId.
+          const deadId = existing.id;
+          const deadAdapterName = existing.adapterName;
+          const resumedCwd = existing.cwd;
+          this.sessions.delete(deadId);
           this.agentSessionIndex.delete(key);
+
+          const resumedSystemPrompt = this.agentRegistry.resolveSystemPrompt(agent.id);
+          const resumedPermission = this.resolvePermissionMode(deadAdapterName, agent.permissionMode);
+          const resumedDisplayName = `${agent.displayName} · ${identity.peerDisplayName ?? identity.peerId}`;
+
+          const resumed = await this.resumeSession(
+            deadId,
+            deadAdapterName,
+            {
+              cwd: resumedCwd,
+              systemPrompt: resumedSystemPrompt,
+              model: agent.model,
+              permissionMode: resumedPermission,
+              allowedTools: agent.allowedTools,
+              deniedTools: agent.deniedTools,
+            },
+            resumedDisplayName,
+            'lobby',
+            { agentId: agent.id, channelIdentity: identity },
+          );
+
+          this.agentSessionIndex.set(this.agentIndexKey(agent.id, identity), resumed.id);
+          return resumed;
         } else {
           return existing;
         }

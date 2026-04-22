@@ -33,12 +33,17 @@ class StubProcess extends EventEmitter implements AgentProcess {
   kill(): void {
     this.killed = true;
     this.status = 'stopped';
+    // Mirror real adapter behavior: emit 'exit' so SessionManager flips the
+    // ManagedSession.status to 'stopped' via its wireProcessEvents handler.
+    this.emit('exit', 0);
   }
 }
 
 interface StubAdapter extends AgentAdapter {
   lastSpawn?: SpawnOptions;
+  lastResume?: { sessionId: string; options?: ResumeOptions };
   spawnCount: number;
+  resumeCount: number;
   spawnedProcesses: StubProcess[];
 }
 
@@ -49,6 +54,7 @@ function createStubAdapter(name = 'stub'): StubAdapter {
     name,
     displayName: 'Stub',
     spawnCount: 0,
+    resumeCount: 0,
     spawnedProcesses,
     permissionMeta: {
       modeLabels: {
@@ -68,9 +74,12 @@ function createStubAdapter(name = 'stub'): StubAdapter {
       spawnedProcesses.push(proc);
       return proc;
     },
-    async resume(_sessionId: string, _options?: ResumeOptions) {
-      counter += 1;
-      const proc = new StubProcess(`${name}-session-${counter}`);
+    async resume(sessionId: string, options?: ResumeOptions) {
+      adapter.lastResume = { sessionId, options };
+      adapter.resumeCount += 1;
+      // Preserve the sessionId across resume (mirrors real CLI behavior where
+      // the JSONL session file is the source of truth and survives restarts).
+      const proc = new StubProcess(sessionId);
       spawnedProcesses.push(proc);
       return proc;
     },
@@ -187,6 +196,37 @@ describe('SessionManager agent-session flows', () => {
     expect(adapter.lastSpawn?.deniedTools).toEqual(['Bash']);
     expect(adapter.lastSpawn?.systemPrompt).toContain('Base directive.');
     expect(adapter.lastSpawn?.systemPrompt).toContain('Be terse.');
+  });
+
+  it('resumes the same CLI session when a prior Agent session has died', async () => {
+    const def = registry.create({
+      id: 'persistent',
+      displayName: 'Persistent',
+      description: '',
+      adapter: 'stub',
+      contextFiles: [],
+    });
+
+    const first = await manager.getOrCreateAgentSession(def, identity);
+    const originalSessionId = first.id;
+    expect(adapter.spawnCount).toBe(1);
+    expect(adapter.resumeCount).toBe(0);
+
+    // Simulate the CLI process dying unexpectedly (crash, OOM, etc.).
+    // kill() emits 'exit', wireProcessEvents flips status to 'stopped'.
+    first.process.kill();
+    expect(first.status).toBe('stopped');
+
+    // Next inbound for the same identity must RESUME, not spawn fresh —
+    // otherwise the JSONL conversation history on disk is orphaned.
+    const resumed = await manager.getOrCreateAgentSession(def, identity);
+
+    expect(resumed.id).toBe(originalSessionId);
+    expect(adapter.spawnCount).toBe(1);             // no extra spawn
+    expect(adapter.resumeCount).toBe(1);            // resumed once
+    expect(adapter.lastResume?.sessionId).toBe(originalSessionId);
+    expect(resumed.agentId).toBe('persistent');
+    expect(resumed.channelIdentity?.peerId).toBe(identity.peerId);
   });
 
   it('stopAllSessionsForAgent kills all agent sessions and clears binding.agent_id', async () => {
