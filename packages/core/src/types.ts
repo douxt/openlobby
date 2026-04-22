@@ -108,6 +108,8 @@ export interface SessionSummary {
   messageMode?: MessageMode;
   /** Whether this session is pinned to the top of the list */
   pinned?: boolean;
+  /** NEW: set when this session was spawned from an AgentDefinition. */
+  agentId?: string;
   /** Channel binding info (if session is bound to an IM channel) */
   channelBinding?: {
     channelName: string;

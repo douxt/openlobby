@@ -1,3 +1,6 @@
+/** Kind of conversation the peer represents. */
+export type ChannelPeerKind = 'direct' | 'group' | 'channel';
+
 /** 标识一个特定通道+账号下的外部用户 */
 export interface ChannelIdentity {
   /** Provider 名称: 'wecom' | 'telegram' | 'feishu' */
@@ -8,6 +11,11 @@ export interface ChannelIdentity {
   peerId: string;
   /** 可选的用户显示名 */
   peerDisplayName?: string;
+  /**
+   * Conversation type. Required for group-chat mention rules.
+   * Providers that cannot distinguish default to 'direct'.
+   */
+  peerKind: ChannelPeerKind;
 }
 
 /** 序列化 key："channelName:accountId:peerId" */
@@ -101,10 +109,17 @@ export interface ChannelBinding {
   accountId: string;
   peerId: string;
   peerDisplayName?: string;
-  /** 'lobby-manager' 或具体 sessionId */
+  /** NEW: populated by provider; stored for mention rule and UI display. */
+  peerKind: ChannelPeerKind;
+  /** 'lobby-manager' 或具体 sessionId — semantics unchanged. */
   target: 'lobby-manager' | string;
   /** 当前活跃的 sessionId（lobby-manager 模式下可动态切换） */
   activeSessionId: string | null;
+  /**
+   * NEW: when set, this binding is driven by an Agent template.
+   * Presence implies the binding is locked (no /exit, /goto, or LM routing).
+   */
+  agentId?: string;
   createdAt: number;
   lastActiveAt: number;
 }

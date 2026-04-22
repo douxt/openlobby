@@ -12,6 +12,7 @@ import type {
   ChannelBinding,
   ChannelPluginInfo,
 } from './channel.js';
+import type { AgentDefinition } from './agent.js';
 
 /** 前端 → 后端 */
 export type ClientMessage =
@@ -44,7 +45,13 @@ export type ClientMessage =
   | { type: 'channel.remove-provider'; providerId: string }
   | { type: 'channel.toggle-provider'; providerId: string; enabled: boolean }
   | { type: 'channel.list-bindings' }
-  | { type: 'channel.bind'; identityKey: string; target: 'lobby-manager' | string }
+  | {
+      type: 'channel.bind';
+      identityKey: string;
+      target: 'lobby-manager' | string;
+      /** NEW: when set, the binding is an Agent binding (locked). */
+      agentId?: string;
+    }
   | { type: 'channel.unbind'; identityKey: string }
   | { type: 'session.plan-mode'; sessionId: string; enabled: boolean }
   | { type: 'session.recover'; sessionId: string }
@@ -65,7 +72,16 @@ export type ClientMessage =
   | { type: 'session.open-pty'; sessionId: string; cols: number; rows: number }
   | { type: 'session.close-pty'; sessionId: string }
   | { type: 'pty.input'; sessionId: string; data: string }
-  | { type: 'pty.resize'; sessionId: string; cols: number; rows: number };
+  | { type: 'pty.resize'; sessionId: string; cols: number; rows: number }
+  | { type: 'agent.list'; includeDeleted?: boolean }
+  | {
+      type: 'agent.create';
+      definition: Omit<AgentDefinition, 'createdAt' | 'updatedAt' | 'deletedAt'>;
+    }
+  | { type: 'agent.update'; id: string; patch: Partial<Omit<AgentDefinition, 'id' | 'createdAt'>> }
+  | { type: 'agent.delete'; id: string }
+  | { type: 'agent.recover'; id: string }
+  | { type: 'agent.hard-delete'; id: string };
 
 /** 后端 → 前端 */
 export type ServerMessage =
@@ -104,4 +120,7 @@ export type ServerMessage =
   | { type: 'pty.opened'; sessionId: string }
   | { type: 'pty.output'; sessionId: string; data: string }
   | { type: 'pty.closed'; sessionId: string }
-  | { type: 'pty.error'; sessionId: string; error: string };
+  | { type: 'pty.error'; sessionId: string; error: string }
+  | { type: 'agent.list'; agents: AgentDefinition[]; includesDeleted: boolean }
+  | { type: 'agent.updated'; agent: AgentDefinition }
+  | { type: 'agent.deleted'; id: string; hard: boolean };

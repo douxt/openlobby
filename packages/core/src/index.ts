@@ -35,5 +35,13 @@ export type {
 } from './channel.js';
 export { toIdentityKey } from './channel.js';
 
+export type {
+  AgentDefinition,
+  AgentAdapterSelector,
+  AgentGroupChatConfig,
+} from './agent.js';
+
+export type { ChannelPeerKind } from './channel.js';
+
 export { ClaudeCodeAdapter, CodexCliAdapter, OpenCodeAdapter, GsdAdapter } from './adapters/index.js';
 export type { ClaudeCodeSpawnOptions } from './adapters/claude-code.js';
