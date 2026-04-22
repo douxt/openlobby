@@ -1,20 +1,42 @@
 import type { WebSocket } from '@fastify/websocket';
-import type { ClientMessage, ServerMessage, LobbyMessage, AdapterCommand } from '@openlobby/core';
+import type {
+  ClientMessage,
+  ServerMessage,
+  LobbyMessage,
+  AdapterCommand,
+  ChannelIdentity,
+} from '@openlobby/core';
 import type { SessionManager } from './session-manager.js';
 import type { LobbyManager } from './lobby-manager.js';
 import type { ChannelRouterImpl } from './channel-router.js';
 import type { PtyManager } from './pty-manager.js';
+import type { AgentRegistry } from './agent-registry.js';
 import { handleSlashCommand } from './slash-commands.js';
 import { LM_WELCOME_TEXT } from './lm-welcome.js';
 import { startWeComQrFlow } from './channels/wecom-qr.js';
 
+/**
+ * Active WebSocket clients. Used for agent.* broadcasts so that all connected
+ * UIs stay in sync when the Agent registry is mutated through any single socket.
+ */
+const activeSockets = new Set<WebSocket>();
+
+function broadcastToAll(msg: ServerMessage): void {
+  const payload = JSON.stringify(msg);
+  for (const client of activeSockets) {
+    if (client.readyState === 1) client.send(payload);
+  }
+}
+
 export function handleWebSocket(
   socket: WebSocket,
   sessionManager: SessionManager,
+  agentRegistry: AgentRegistry,
   lobbyManager?: LobbyManager,
   channelRouter?: ChannelRouterImpl,
   ptyManager?: PtyManager,
 ): void {
+  activeSockets.add(socket);
   const listenerId = Math.random().toString(36).slice(2);
   let activeQrAbort: AbortController | null = null;
 
@@ -378,11 +400,38 @@ export function handleWebSocket(
 
         case 'channel.bind': {
           if (channelRouter) {
-            const result = channelRouter.bindSession(data.identityKey, data.target);
-            if (result.ok) {
-              send({ type: 'channel.bindings-list', bindings: channelRouter.listBindings() });
+            // When the bind request carries an agentId we upsert a full binding
+            // via bindIdentity so the routing lock is persisted. Otherwise fall
+            // back to the legacy bindSession path (requires an existing binding).
+            if (data.agentId) {
+              // identityKey format: "channelName:accountId:peerId" (peerId may
+              // contain ':' — everything after the second segment is peerId).
+              const parts = data.identityKey.split(':');
+              const channelName = parts[0] ?? '';
+              const accountId = parts[1] ?? '';
+              const peerId = parts.slice(2).join(':');
+              const identity: ChannelIdentity = {
+                channelName,
+                accountId,
+                peerId,
+                // Default — the real peerKind is overwritten on first inbound
+                // by the provider (see ChannelRouter.handleInbound sync block).
+                peerKind: 'direct',
+              };
+              try {
+                const binding = await channelRouter.bindIdentity(identity, data.target, data.agentId);
+                broadcastToAll({ type: 'channel.binding-updated', binding });
+                send({ type: 'channel.bindings-list', bindings: channelRouter.listBindings() });
+              } catch (err) {
+                send({ type: 'error', error: (err as Error).message });
+              }
             } else {
-              send({ type: 'error', error: result.error ?? 'Bind failed' });
+              const result = channelRouter.bindSession(data.identityKey, data.target);
+              if (result.ok) {
+                send({ type: 'channel.bindings-list', bindings: channelRouter.listBindings() });
+              } else {
+                send({ type: 'error', error: result.error ?? 'Bind failed' });
+              }
             }
           }
           break;
@@ -575,6 +624,67 @@ export function handleWebSocket(
           break;
         }
 
+        // ─── Agent Definitions ──────────────────────────────
+        case 'agent.list': {
+          const agents = agentRegistry.list(data.includeDeleted ?? false);
+          send({ type: 'agent.list', agents, includesDeleted: !!data.includeDeleted });
+          break;
+        }
+
+        case 'agent.create': {
+          try {
+            const agent = agentRegistry.create(data.definition);
+            broadcastToAll({ type: 'agent.updated', agent });
+          } catch (err) {
+            send({ type: 'error', error: (err as Error).message });
+          }
+          break;
+        }
+
+        case 'agent.update': {
+          try {
+            const agent = agentRegistry.update(data.id, data.patch);
+            broadcastToAll({ type: 'agent.updated', agent });
+          } catch (err) {
+            send({ type: 'error', error: (err as Error).message });
+          }
+          break;
+        }
+
+        case 'agent.delete': {
+          try {
+            await sessionManager.stopAllSessionsForAgent(data.id);
+            agentRegistry.softDelete(data.id);
+            broadcastToAll({ type: 'agent.deleted', id: data.id, hard: false });
+            const updated = agentRegistry.get(data.id);
+            if (updated) broadcastToAll({ type: 'agent.updated', agent: updated });
+          } catch (err) {
+            send({ type: 'error', error: (err as Error).message });
+          }
+          break;
+        }
+
+        case 'agent.recover': {
+          try {
+            agentRegistry.recover(data.id);
+            const updated = agentRegistry.get(data.id);
+            if (updated) broadcastToAll({ type: 'agent.updated', agent: updated });
+          } catch (err) {
+            send({ type: 'error', error: (err as Error).message });
+          }
+          break;
+        }
+
+        case 'agent.hard-delete': {
+          try {
+            agentRegistry.hardDelete(data.id);
+            broadcastToAll({ type: 'agent.deleted', id: data.id, hard: true });
+          } catch (err) {
+            send({ type: 'error', error: (err as Error).message });
+          }
+          break;
+        }
+
         default: {
           send({
             type: 'error',
@@ -591,6 +701,7 @@ export function handleWebSocket(
   });
 
   socket.on('close', () => {
+    activeSockets.delete(socket);
     if (activeQrAbort) {
       activeQrAbort.abort();
       activeQrAbort = null;

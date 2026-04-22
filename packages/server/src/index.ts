@@ -248,7 +248,7 @@ export async function createServer(options: ServerOptions = {}) {
 
   // WebSocket endpoint
   app.get('/ws', { websocket: true }, (socket) => {
-    handleWebSocket(socket, sessionManager, lobbyManager, channelRouter, ptyManager);
+    handleWebSocket(socket, sessionManager, agentRegistry, lobbyManager, channelRouter, ptyManager);
   });
 
   // Serve web frontend static files if available
