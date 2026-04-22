@@ -15,6 +15,7 @@ import { createBuiltinAdapters, loadAdapterPlugin } from './adapters/index.js';
 import { registerUploadRoute } from './upload.js';
 import { startMcpApi } from './mcp-api.js';
 import { LobbyManager } from './lobby-manager.js';
+import { AgentRegistry } from './agent-registry.js';
 import { ChannelRouterImpl } from './channel-router.js';
 import { createProvider } from './channels/index.js';
 import { PtyManager } from './pty-manager.js';
@@ -96,6 +97,11 @@ export async function createServer(options: ServerOptions = {}) {
   for (const adapter of allAdapters.values()) {
     sessionManager.registerAdapter(adapter);
   }
+
+  // Construct AgentRegistry and wire it into SessionManager BEFORE LobbyManager
+  // so any agent-backed flows initiated during startup resolve correctly.
+  const agentRegistry = new AgentRegistry(db);
+  sessionManager.setAgentRegistry(agentRegistry);
 
   // Start MCP internal API on separate port (channelRouter injected below)
   const mcpApi = await startMcpApi(sessionManager, mcpApiPort, versionChecker, () => {

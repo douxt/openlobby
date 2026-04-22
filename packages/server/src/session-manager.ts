@@ -1,4 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { openInTerminal } from './terminal-detector.js';
 import type { OpenResult } from './terminal-detector.js';
 import type {
@@ -11,6 +13,8 @@ import type {
   AdapterCommand,
   MessageMode,
   PermissionMode,
+  AgentDefinition,
+  ChannelIdentity,
 } from '@openlobby/core';
 import type Database from 'better-sqlite3';
 import {
@@ -26,7 +30,10 @@ import {
   getAdapterDefault,
   getAllAdapterDefaults,
   setAdapterDefault,
+  getSessionsByAgent,
+  clearBindingAgentBySession,
 } from './db.js';
+import type { AgentRegistry } from './agent-registry.js';
 
 export interface ManagedSession {
   id: string;
@@ -47,6 +54,14 @@ export interface ManagedSession {
   messageMode?: MessageMode;
   /** Whether this session is pinned to the top of the sidebar */
   pinned: boolean;
+  /** NEW: Agent id this session was spawned from (Agent mode only) */
+  agentId?: string;
+  /** NEW: Snapshot of the channel identity the session was spawned for (Agent mode only) */
+  channelIdentity?: ChannelIdentity;
+  /** NEW: Tool allow-list (mirrors SpawnOptions for persistence across resume) */
+  allowedTools?: string[];
+  /** NEW: Tool deny-list (mirrors SpawnOptions for persistence across resume) */
+  deniedTools?: string[];
   /** Cumulative token usage for compact threshold tracking */
   tokenUsage: {
     inputTokens: number;
@@ -91,6 +106,9 @@ export class SessionManager {
     string,
     (session: ManagedSession, content: unknown) => void
   >();
+  /** Index: "agentId:channel:accountId:peerId" → sessionId */
+  private agentSessionIndex = new Map<string, string>();
+  private agentRegistry: AgentRegistry | null = null;
 
   constructor(db?: Database.Database) {
     this.db = db ?? null;
@@ -98,6 +116,39 @@ export class SessionManager {
 
   registerAdapter(adapter: AgentAdapter): void {
     this.adapters.set(adapter.name, adapter);
+  }
+
+  /**
+   * Inject the AgentRegistry that owns the per-agent workspace roots. Must be
+   * called before any Agent-session flows (getOrCreateAgentSession, stop-cascade).
+   * Rebuilds the in-memory `agentSessionIndex` from any already-loaded sessions
+   * that carry agentId + channelIdentity (no-op on a fresh process).
+   */
+  setAgentRegistry(registry: AgentRegistry): void {
+    this.agentRegistry = registry;
+    for (const session of this.sessions.values()) {
+      if (session.agentId && session.channelIdentity) {
+        const key = this.agentIndexKey(session.agentId, session.channelIdentity);
+        this.agentSessionIndex.set(key, session.id);
+      }
+    }
+  }
+
+  private agentIndexKey(agentId: string, id: ChannelIdentity): string {
+    return `${agentId}:${id.channelName}:${id.accountId}:${id.peerId}`;
+  }
+
+  private peerHash(id: ChannelIdentity): string {
+    return createHash('sha256')
+      .update(`${id.channelName}:${id.accountId}:${id.peerId}`)
+      .digest('hex')
+      .slice(0, 16);
+  }
+
+  private firstAvailableAdapterName(): string {
+    const first = this.adapters.keys().next();
+    if (first.done) throw new Error('No adapters installed.');
+    return first.value;
   }
 
   onMessage(
@@ -228,6 +279,7 @@ export class SessionManager {
       origin: s.origin,
       messageMode: this.getSessionMode(s.id),
       pinned: s.pinned,
+      agentId: s.agentId,
       resumeCommand: this.buildResumeCommand(s),
     };
   }
@@ -474,7 +526,7 @@ export class SessionManager {
       permission_mode: session.permissionMode ?? null,
       message_mode: session.messageMode ?? null,
       pinned: session.pinned ? 1 : 0,
-      agent_id: null,
+      agent_id: session.agentId ?? null,
     });
   }
 
@@ -493,35 +545,20 @@ export class SessionManager {
     const spawnOptions = { ...options, permissionMode: effectivePermission };
     const process = await adapter.spawn(spawnOptions);
 
-    const session: ManagedSession = {
-      id: process.sessionId,
-      previousIds: [],
+    const session = this.registerManagedSession({
+      process,
       adapterName,
       displayName: displayName ?? `Session ${this.sessions.size + 1}`,
-      status: 'running',
-      createdAt: Date.now(),
-      lastActiveAt: Date.now(),
       cwd: options.cwd,
-      process,
-      messageCount: 0,
+      origin,
       model: options.model,
       permissionMode: effectivePermission,
-      origin,
-      messageMode: (options as any).messageMode ?? undefined,
-      pinned: false,
-      tokenUsage: {
-        inputTokens: 0,
-        outputTokens: 0,
-        totalTokens: 0,
-        compactCount: 0,
-        compactPrompted: false,
-      },
-    };
+      messageMode: (options as { messageMode?: MessageMode }).messageMode,
+      allowedTools: options.allowedTools,
+      deniedTools: options.deniedTools,
+      broadcastUpdate: true,
+    });
 
-    this.wireProcessEvents(session);
-    this.sessions.set(session.id, session);
-    this.persistSession(session);
-    this.broadcastSessionUpdate(session);
     // Send initial prompt AFTER events are wired to avoid race condition
     if (options.prompt) {
       process.sendMessage(options.prompt);
@@ -541,22 +578,69 @@ export class SessionManager {
 
     const effectivePermission = this.resolvePermissionMode(adapterName, options.permissionMode);
     const process = await adapter.resume(sessionId, { ...options, permissionMode: effectivePermission });
-    const session: ManagedSession = {
-      id: process.sessionId,
-      previousIds: [],
+
+    const session = this.registerManagedSession({
+      process,
       adapterName,
       displayName,
+      cwd: options.cwd,
+      origin,
+      model: options.model,
+      permissionMode: effectivePermission,
+      messageMode: (options as { messageMode?: MessageMode }).messageMode,
+      allowedTools: options.allowedTools,
+      deniedTools: options.deniedTools,
+      broadcastUpdate: false,
+    });
+
+    // Send initial prompt AFTER events are wired to avoid race condition
+    if (options.prompt) {
+      process.sendMessage(options.prompt);
+    }
+    return session;
+  }
+
+  /**
+   * Common tail for every spawn/resume path: build the ManagedSession,
+   * wire adapter events, store it in memory + SQLite, and optionally broadcast.
+   * Keeps createSession/resumeSession/getOrCreateAgentSession in lock-step so
+   * they all observe the same lifecycle.
+   */
+  private registerManagedSession(args: {
+    process: AgentProcess;
+    adapterName: string;
+    displayName: string;
+    cwd: string;
+    origin: 'lobby' | 'cli' | 'lobby-manager';
+    model?: string;
+    permissionMode?: PermissionMode;
+    messageMode?: MessageMode;
+    allowedTools?: string[];
+    deniedTools?: string[];
+    agentId?: string;
+    channelIdentity?: ChannelIdentity;
+    broadcastUpdate: boolean;
+  }): ManagedSession {
+    const session: ManagedSession = {
+      id: args.process.sessionId,
+      previousIds: [],
+      adapterName: args.adapterName,
+      displayName: args.displayName,
       status: 'running',
       createdAt: Date.now(),
       lastActiveAt: Date.now(),
-      cwd: options.cwd,
-      process,
+      cwd: args.cwd,
+      process: args.process,
       messageCount: 0,
-      model: options.model,
-      permissionMode: effectivePermission,
-      origin,
-      messageMode: (options as any).messageMode ?? undefined,
+      model: args.model,
+      permissionMode: args.permissionMode,
+      origin: args.origin,
+      messageMode: args.messageMode,
       pinned: false,
+      agentId: args.agentId,
+      channelIdentity: args.channelIdentity,
+      allowedTools: args.allowedTools,
+      deniedTools: args.deniedTools,
       tokenUsage: {
         inputTokens: 0,
         outputTokens: 0,
@@ -565,14 +649,120 @@ export class SessionManager {
         compactPrompted: false,
       },
     };
+
     this.wireProcessEvents(session);
     this.sessions.set(session.id, session);
     this.persistSession(session);
-    // Send initial prompt AFTER events are wired to avoid race condition
-    if (options.prompt) {
-      process.sendMessage(options.prompt);
+    if (args.broadcastUpdate) {
+      this.broadcastSessionUpdate(session);
     }
     return session;
+  }
+
+  /**
+   * Spawn (or reuse) a session derived from an AgentDefinition for a given channel identity.
+   * Enforces per-peer cwd isolation under the registry's agentsRoot, injects the resolved
+   * system prompt, and registers the session with agentId so ChannelRouter recognizes it
+   * as locked. Subsequent calls with the same identity return the same session.
+   */
+  async getOrCreateAgentSession(
+    agent: AgentDefinition,
+    identity: ChannelIdentity,
+  ): Promise<ManagedSession> {
+    if (!this.agentRegistry) {
+      throw new Error('AgentRegistry not set on SessionManager');
+    }
+
+    const key = this.agentIndexKey(agent.id, identity);
+    const existingId = this.agentSessionIndex.get(key);
+    if (existingId) {
+      const existing = this.sessions.get(existingId);
+      if (existing) {
+        if (existing.status === 'stopped' || existing.status === 'error') {
+          // Dead process — drop index entry and fall through to spawn a fresh one.
+          this.sessions.delete(existing.id);
+          this.agentSessionIndex.delete(key);
+        } else {
+          return existing;
+        }
+      } else {
+        // Stale index entry (session removed from memory) — drop it.
+        this.agentSessionIndex.delete(key);
+      }
+    }
+
+    // Resolve adapter ('any' → first installed)
+    const adapterName = agent.adapter === 'any'
+      ? this.firstAvailableAdapterName()
+      : agent.adapter;
+    const adapter = this.adapters.get(adapterName);
+    if (!adapter) throw new Error(`Adapter "${adapterName}" is not available.`);
+
+    // Per-peer cwd under the registry's agentsRoot (respects overrides).
+    const peerHash = this.peerHash(identity);
+    const cwd = join(this.agentRegistry.getAgentSessionsRoot(agent.id), peerHash);
+    mkdirSync(cwd, { recursive: true });
+
+    const systemPrompt = this.agentRegistry.resolveSystemPrompt(agent.id);
+    const effectivePermission = this.resolvePermissionMode(adapterName, agent.permissionMode);
+
+    const displayName = `${agent.displayName} · ${identity.peerDisplayName ?? identity.peerId}`;
+
+    const proc = await adapter.spawn({
+      cwd,
+      systemPrompt,
+      model: agent.model,
+      permissionMode: effectivePermission,
+      allowedTools: agent.allowedTools,
+      deniedTools: agent.deniedTools,
+    });
+
+    const session = this.registerManagedSession({
+      process: proc,
+      adapterName,
+      displayName,
+      cwd,
+      origin: 'lobby',
+      model: agent.model,
+      permissionMode: effectivePermission,
+      allowedTools: agent.allowedTools,
+      deniedTools: agent.deniedTools,
+      agentId: agent.id,
+      channelIdentity: identity,
+      broadcastUpdate: true,
+    });
+
+    this.agentSessionIndex.set(key, session.id);
+    return session;
+  }
+
+  /**
+   * Stop all active sessions spawned by the given agent id and clear the
+   * `agent_id` field on bindings that reference them. Does NOT delete the
+   * session rows (soft-delete only); recover can re-bind later.
+   */
+  async stopAllSessionsForAgent(agentId: string): Promise<void> {
+    const rows = this.db ? getSessionsByAgent(this.db, agentId) : [];
+    for (const row of rows) {
+      const session = this.sessions.get(row.id);
+      if (session) {
+        try {
+          session.process.kill();
+        } catch {
+          // process may already be dead — ignore
+        }
+      }
+      if (this.db) {
+        clearBindingAgentBySession(this.db, row.id);
+      }
+    }
+    // Drop dropped sessions from the agent-session index.
+    const targetIds = new Set(rows.map((r) => r.id));
+    for (const [key, sid] of this.agentSessionIndex) {
+      if (targetIds.has(sid)) {
+        this.agentSessionIndex.delete(key);
+      }
+    }
   }
 
   configureSession(sessionId: string, options: Partial<SpawnOptions> & { messageMode?: MessageMode }): void {
@@ -583,6 +773,8 @@ export class SessionManager {
     if (options.permissionMode) session.permissionMode = options.permissionMode;
     if (options.messageMode) session.messageMode = options.messageMode;
     if (options.cwd) session.cwd = options.cwd;
+    if (options.allowedTools !== undefined) session.allowedTools = options.allowedTools;
+    if (options.deniedTools !== undefined) session.deniedTools = options.deniedTools;
     this.persistSession(session);
     this.broadcastSessionUpdate(session);
   }
@@ -691,6 +883,7 @@ export class SessionManager {
       origin: row.origin as 'lobby' | 'cli' | 'lobby-manager',
       messageMode: (row.message_mode as MessageMode) ?? undefined,
       pinned: row.pinned === 1,
+      agentId: row.agent_id ?? undefined,
       tokenUsage: {
         inputTokens: 0,
         outputTokens: 0,
@@ -1100,11 +1293,13 @@ export class SessionManager {
 
     // Read current spawn options from the process
     const currentOpts = (session.process as unknown as { spawnOptions?: SpawnOptions })?.spawnOptions;
-    const spawnOptions = {
+    const spawnOptions: SpawnOptions = {
       ...currentOpts,
       cwd: session.cwd,
       model: session.model,
       permissionMode: this.resolvePermissionMode(session),
+      allowedTools: session.allowedTools ?? currentOpts?.allowedTools,
+      deniedTools: session.deniedTools ?? currentOpts?.deniedTools,
     };
 
     // Detach old process event listeners before killing to prevent
