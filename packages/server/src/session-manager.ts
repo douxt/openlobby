@@ -474,6 +474,7 @@ export class SessionManager {
       permission_mode: session.permissionMode ?? null,
       message_mode: session.messageMode ?? null,
       pinned: session.pinned ? 1 : 0,
+      agent_id: null,
     });
   }
 
@@ -855,6 +856,7 @@ export class SessionManager {
         permission_mode: null,
         message_mode: null,
         pinned: 0,
+        agent_id: null,
       });
     }
 

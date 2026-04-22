@@ -81,8 +81,10 @@ describe('ChannelRouter telegram msg-tidy routing', () => {
       account_id: 'SawOpenLobbyBot',
       peer_id: '342506780',
       peer_display_name: 'Saw Xu',
+      peer_kind: 'direct',
       target: 'session-1',
       active_session_id: 'session-1',
+      agent_id: null,
       created_at: Date.now(),
       last_active_at: Date.now(),
     });
@@ -130,8 +132,10 @@ describe('ChannelRouter telegram msg-tidy routing', () => {
       account_id: 'SawOpenLobbyBot',
       peer_id: '342506780',
       peer_display_name: 'Saw Xu',
+      peer_kind: 'direct',
       target: 'session-1',
       active_session_id: 'session-1',
+      agent_id: null,
       created_at: Date.now(),
       last_active_at: Date.now(),
     });

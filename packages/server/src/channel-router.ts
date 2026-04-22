@@ -10,6 +10,7 @@ import type {
   MessageMode,
   PermissionMode,
   CommandGroup,
+  ChannelPeerKind,
 } from '@openlobby/core';
 import { toIdentityKey } from '@openlobby/core';
 import type Database from 'better-sqlite3';
@@ -133,6 +134,7 @@ export class ChannelRouterImpl implements ChannelRouter {
         accountId: bindingRow.account_id,
         peerId: bindingRow.peer_id,
         peerDisplayName: bindingRow.peer_display_name ?? undefined,
+        peerKind: (bindingRow.peer_kind ?? 'direct') as ChannelPeerKind,
       };
       const tokensK = Math.round(session.tokenUsage.totalTokens / 1000);
       const text = `⚠️ Session "${session.displayName}" context approaching limit (${tokensK}K tokens).\nReply /compact to compress, or /compact <instructions> with custom guidance.`;
@@ -150,6 +152,7 @@ export class ChannelRouterImpl implements ChannelRouter {
         accountId: bindingRow.account_id,
         peerId: bindingRow.peer_id,
         peerDisplayName: bindingRow.peer_display_name ?? undefined,
+        peerKind: (bindingRow.peer_kind ?? 'direct') as ChannelPeerKind,
       };
       const preTokens = (content as Record<string, unknown>)?.preTokens as number | undefined;
       const preK = preTokens ? Math.round(preTokens / 1000) : null;
@@ -752,6 +755,7 @@ export class ChannelRouterImpl implements ChannelRouter {
       accountId: bindingRow.account_id,
       peerId: bindingRow.peer_id,
       peerDisplayName: bindingRow.peer_display_name ?? undefined,
+      peerKind: (bindingRow.peer_kind ?? 'direct') as ChannelPeerKind,
     };
 
     const sessionName = this.getSessionDisplayName(sessionId);
@@ -1119,7 +1123,7 @@ export class ChannelRouterImpl implements ChannelRouter {
   private flushStreamThinking(
     identityKey: string,
     provider: ChannelProvider,
-    identity: { channelName: string; accountId: string; peerId: string; peerDisplayName?: string },
+    identity: { channelName: string; accountId: string; peerId: string; peerDisplayName?: string; peerKind: ChannelPeerKind },
     sessionName: string,
   ): void {
     const state = this.streamStates.get(identityKey);
@@ -1141,7 +1145,7 @@ export class ChannelRouterImpl implements ChannelRouter {
   private finishStream(
     identityKey: string,
     provider: ChannelProvider,
-    identity: { channelName: string; accountId: string; peerId: string; peerDisplayName?: string },
+    identity: { channelName: string; accountId: string; peerId: string; peerDisplayName?: string; peerKind: ChannelPeerKind },
     finalText: string,
   ): void {
     // Clear any pending flush timer
@@ -1202,6 +1206,7 @@ export class ChannelRouterImpl implements ChannelRouter {
       accountId: bindingRow.account_id,
       peerId: bindingRow.peer_id,
       peerDisplayName: bindingRow.peer_display_name ?? undefined,
+      peerKind: (bindingRow.peer_kind ?? 'direct') as ChannelPeerKind,
     };
 
     const content = msg.content as Record<string, unknown>;
@@ -1302,7 +1307,7 @@ export class ChannelRouterImpl implements ChannelRouter {
         if (provider) {
           console.log(`[ChannelRouter] Session ${session.id} → ${session.status}, sending retry button to ${binding.identity_key}`);
           provider.sendMessage({
-            identity: { channelName: binding.channel_name, accountId: binding.account_id, peerId: binding.peer_id },
+            identity: { channelName: binding.channel_name, accountId: binding.account_id, peerId: binding.peer_id, peerKind: (binding.peer_kind ?? 'direct') as ChannelPeerKind },
             text: `⚠️ 会话异常 (${session.status})，任务可能已中断。`,
             kind: 'message',
             actions: [{ label: '🔄 重试/继续', callbackData: `resume:${session.id}` }],
@@ -1329,6 +1334,7 @@ export class ChannelRouterImpl implements ChannelRouter {
             channelName: binding.channel_name,
             accountId: binding.account_id,
             peerId: binding.peer_id,
+            peerKind: (binding.peer_kind ?? 'direct') as ChannelPeerKind,
           },
           text: `⚠️ 会话已被销毁，已切换回 Lobby Manager。`,
           kind: 'message',
@@ -1355,7 +1361,7 @@ export class ChannelRouterImpl implements ChannelRouter {
       const provider = this.providers.get(`${binding.channel_name}:${binding.account_id}`);
       if (provider) {
         provider.sendMessage({
-          identity: { channelName: binding.channel_name, accountId: binding.account_id, peerId: binding.peer_id },
+          identity: { channelName: binding.channel_name, accountId: binding.account_id, peerId: binding.peer_id, peerKind: (binding.peer_kind ?? 'direct') as ChannelPeerKind },
           text: `⚠️ 会话已被 ${existing.peer_display_name ?? existing.peer_id} 占用，无法切换。`,
           kind: 'message',
         }).catch(() => {});
@@ -1374,7 +1380,7 @@ export class ChannelRouterImpl implements ChannelRouter {
     const provider = this.providers.get(`${binding.channel_name}:${binding.account_id}`);
     if (provider) {
       provider.sendMessage({
-        identity: { channelName: binding.channel_name, accountId: binding.account_id, peerId: binding.peer_id },
+        identity: { channelName: binding.channel_name, accountId: binding.account_id, peerId: binding.peer_id, peerKind: (binding.peer_kind ?? 'direct') as ChannelPeerKind },
         text: `**【Lobby Manager】** 已切换到会话: **${newSessionName}**`,
         kind: 'message',
       }).catch(() => {});
@@ -1457,8 +1463,10 @@ export class ChannelRouterImpl implements ChannelRouter {
       account_id: identity.accountId,
       peer_id: identity.peerId,
       peer_display_name: identity.peerDisplayName ?? null,
+      peer_kind: 'direct',
       target: 'lobby-manager',
       active_session_id: null,
+      agent_id: null,
       created_at: now,
       last_active_at: now,
     };
@@ -1496,7 +1504,7 @@ export class ChannelRouterImpl implements ChannelRouter {
   private sendQuestionToIM(
     identityKey: string,
     provider: ChannelProvider,
-    identity: { channelName: string; accountId: string; peerId: string; peerDisplayName?: string },
+    identity: { channelName: string; accountId: string; peerId: string; peerDisplayName?: string; peerKind: ChannelPeerKind },
     state: PendingQuestionState,
   ): void {
     const q = state.questions[state.currentIndex];
@@ -1541,7 +1549,7 @@ export class ChannelRouterImpl implements ChannelRouter {
   /** Advance to next question or submit all answers */
   private advanceQuestion(
     identityKey: string,
-    identity: { channelName: string; accountId: string; peerId: string; peerDisplayName?: string },
+    identity: { channelName: string; accountId: string; peerId: string; peerDisplayName?: string; peerKind: ChannelPeerKind },
     state: PendingQuestionState,
   ): void {
     state.currentIndex++;
@@ -1576,7 +1584,7 @@ export class ChannelRouterImpl implements ChannelRouter {
       if (!sessionId) return;
       console.log(`[ChannelRouter] Resume callback for session ${sessionId} from ${identityKey}`);
       await this.handleInbound({
-        identity: { channelName: identity.channelName, accountId: identity.accountId, peerId: identity.peerId },
+        identity: { channelName: identity.channelName, accountId: identity.accountId, peerId: identity.peerId, peerKind: identity.peerKind },
         externalMessageId: `resume-${sessionId}-${Date.now()}`,
         text: '继续',
         timestamp: Date.now(),
@@ -1714,8 +1722,10 @@ function rowToBinding(row: ChannelBindingRow): ChannelBinding {
     accountId: row.account_id,
     peerId: row.peer_id,
     peerDisplayName: row.peer_display_name ?? undefined,
+    peerKind: (row.peer_kind ?? 'direct') as ChannelPeerKind,
     target: row.target as 'lobby-manager' | string,
     activeSessionId: row.active_session_id,
+    agentId: row.agent_id ?? undefined,
     createdAt: row.created_at,
     lastActiveAt: row.last_active_at,
   };

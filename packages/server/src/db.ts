@@ -18,6 +18,7 @@ export interface SessionRow {
   permission_mode: string | null;
   message_mode: string | null;
   pinned: number;
+  agent_id: string | null;
 }
 
 export function initDb(dbPath?: string): Database.Database {
@@ -117,6 +118,46 @@ export function initDb(dbPath?: string): Database.Database {
     )
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_definitions (
+      id                  TEXT PRIMARY KEY,
+      display_name        TEXT NOT NULL,
+      description         TEXT NOT NULL DEFAULT '',
+      adapter             TEXT NOT NULL,
+      system_prompt       TEXT,
+      context_files_json  TEXT NOT NULL DEFAULT '[]',
+      model               TEXT,
+      permission_mode     TEXT,
+      allowed_tools_json  TEXT,
+      denied_tools_json   TEXT,
+      group_chat_json     TEXT,
+      deleted_at          INTEGER,
+      created_at          INTEGER NOT NULL,
+      updated_at          INTEGER NOT NULL
+    )
+  `);
+
+  // Migration: add agent_id column to sessions
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN agent_id TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+
+  // Migration: add agent_id column to channel_bindings
+  try {
+    db.exec(`ALTER TABLE channel_bindings ADD COLUMN agent_id TEXT`);
+  } catch {
+    // Column already exists — ignore
+  }
+
+  // Migration: add peer_kind column to channel_bindings (default 'direct' for backfill)
+  try {
+    db.exec(`ALTER TABLE channel_bindings ADD COLUMN peer_kind TEXT NOT NULL DEFAULT 'direct'`);
+  } catch {
+    // Column already exists — ignore
+  }
+
   // Migration: convert old CLI-specific permission_mode values to unified enum
   db.exec(`
     UPDATE sessions SET permission_mode = 'auto'
@@ -147,9 +188,9 @@ export function initDb(dbPath?: string): Database.Database {
 export function upsertSession(db: Database.Database, row: SessionRow): void {
   db.prepare(`
     INSERT OR REPLACE INTO sessions
-      (id, adapter_name, display_name, cwd, jsonl_path, origin, status, created_at, last_active_at, model, tags, permission_mode, message_mode, pinned)
+      (id, adapter_name, display_name, cwd, jsonl_path, origin, status, created_at, last_active_at, model, tags, permission_mode, message_mode, pinned, agent_id)
     VALUES
-      (@id, @adapter_name, @display_name, @cwd, @jsonl_path, @origin, @status, @created_at, @last_active_at, @model, @tags, @permission_mode, @message_mode, @pinned)
+      (@id, @adapter_name, @display_name, @cwd, @jsonl_path, @origin, @status, @created_at, @last_active_at, @model, @tags, @permission_mode, @message_mode, @pinned, @agent_id)
   `).run(row);
 }
 
@@ -251,8 +292,10 @@ export interface ChannelBindingRow {
   account_id: string;
   peer_id: string;
   peer_display_name: string | null;
+  peer_kind: string;
   target: string;
   active_session_id: string | null;
+  agent_id: string | null;
   created_at: number;
   last_active_at: number;
 }
@@ -260,9 +303,9 @@ export interface ChannelBindingRow {
 export function upsertBinding(db: Database.Database, row: ChannelBindingRow): void {
   db.prepare(`
     INSERT OR REPLACE INTO channel_bindings
-      (identity_key, channel_name, account_id, peer_id, peer_display_name, target, active_session_id, created_at, last_active_at)
+      (identity_key, channel_name, account_id, peer_id, peer_display_name, peer_kind, target, active_session_id, agent_id, created_at, last_active_at)
     VALUES
-      (@identity_key, @channel_name, @account_id, @peer_id, @peer_display_name, @target, @active_session_id, @created_at, @last_active_at)
+      (@identity_key, @channel_name, @account_id, @peer_id, @peer_display_name, @peer_kind, @target, @active_session_id, @agent_id, @created_at, @last_active_at)
   `).run(row);
 }
 
@@ -311,7 +354,7 @@ export function clearBindingsBySession(db: Database.Database, sessionId: string)
 
 export function resetBindingTargetBySession(db: Database.Database, sessionId: string): void {
   db.prepare(
-    `UPDATE channel_bindings SET target = 'lobby-manager', active_session_id = NULL WHERE target = ? OR active_session_id = ?`,
+    `UPDATE channel_bindings SET target = 'lobby-manager', active_session_id = NULL, agent_id = NULL WHERE target = ? OR active_session_id = ?`,
   ).run(sessionId, sessionId);
 }
 
@@ -398,4 +441,68 @@ export function setAdapterDefault(db: Database.Database, adapterName: string, pe
 
 export function getAllAdapterDefaults(db: Database.Database): AdapterDefaultRow[] {
   return db.prepare('SELECT * FROM adapter_defaults ORDER BY adapter_name').all() as AdapterDefaultRow[];
+}
+
+// ─── Agent Definitions ──────────────────────────────────────────────
+
+export interface AgentDefinitionRow {
+  id: string;
+  display_name: string;
+  description: string;
+  adapter: string;
+  system_prompt: string | null;
+  context_files_json: string;
+  model: string | null;
+  permission_mode: string | null;
+  allowed_tools_json: string | null;
+  denied_tools_json: string | null;
+  group_chat_json: string | null;
+  deleted_at: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export function upsertAgentDefinition(db: Database.Database, row: AgentDefinitionRow): void {
+  db.prepare(`
+    INSERT OR REPLACE INTO agent_definitions
+      (id, display_name, description, adapter, system_prompt, context_files_json, model, permission_mode, allowed_tools_json, denied_tools_json, group_chat_json, deleted_at, created_at, updated_at)
+    VALUES
+      (@id, @display_name, @description, @adapter, @system_prompt, @context_files_json, @model, @permission_mode, @allowed_tools_json, @denied_tools_json, @group_chat_json, @deleted_at, @created_at, @updated_at)
+  `).run(row);
+}
+
+export function getAgentDefinition(db: Database.Database, id: string): AgentDefinitionRow | undefined {
+  return db.prepare('SELECT * FROM agent_definitions WHERE id = ?').get(id) as AgentDefinitionRow | undefined;
+}
+
+export function getAllAgentDefinitions(
+  db: Database.Database,
+  includeDeleted: boolean,
+): AgentDefinitionRow[] {
+  const sql = includeDeleted
+    ? 'SELECT * FROM agent_definitions ORDER BY created_at ASC'
+    : 'SELECT * FROM agent_definitions WHERE deleted_at IS NULL ORDER BY created_at ASC';
+  return db.prepare(sql).all() as AgentDefinitionRow[];
+}
+
+export function softDeleteAgentDefinition(db: Database.Database, id: string, deletedAt: number): void {
+  db.prepare('UPDATE agent_definitions SET deleted_at = ?, updated_at = ? WHERE id = ?').run(deletedAt, deletedAt, id);
+}
+
+export function recoverAgentDefinition(db: Database.Database, id: string, updatedAt: number): void {
+  db.prepare('UPDATE agent_definitions SET deleted_at = NULL, updated_at = ? WHERE id = ?').run(updatedAt, id);
+}
+
+export function hardDeleteAgentDefinition(db: Database.Database, id: string): void {
+  db.prepare('DELETE FROM agent_definitions WHERE id = ?').run(id);
+}
+
+/** Get all sessions spawned by a given agent id (active or stopped). */
+export function getSessionsByAgent(db: Database.Database, agentId: string): SessionRow[] {
+  return db.prepare('SELECT * FROM sessions WHERE agent_id = ?').all(agentId) as SessionRow[];
+}
+
+/** Clear agent_id on bindings when the underlying session is removed. */
+export function clearBindingAgentBySession(db: Database.Database, sessionId: string): void {
+  db.prepare('UPDATE channel_bindings SET agent_id = NULL WHERE active_session_id = ?').run(sessionId);
 }
