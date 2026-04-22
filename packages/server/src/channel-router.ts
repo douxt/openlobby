@@ -1,7 +1,9 @@
 import type {
+  AgentDefinition,
   ChannelProvider,
   ChannelRouter,
   ChannelBinding,
+  ChannelIdentity,
   ChannelProviderConfig,
   ChannelProviderInfo,
   InboundChannelMessage,
@@ -18,6 +20,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import type { SessionManager } from './session-manager.js';
 import type { LobbyManager } from './lobby-manager.js';
+import type { AgentRegistry } from './agent-registry.js';
 import {
   upsertBinding,
   getBinding,
@@ -48,6 +51,39 @@ import { LM_WELCOME_TEXT } from './lm-welcome.js';
 const STREAM_THROTTLE_MS = 800;
 /** Max intermediate stream messages per stream (WeCom SDK limit ~100, keep headroom) */
 const MAX_INTERMEDIATE_MSGS = 85;
+
+/**
+ * Slash commands that are rejected for Agent-bound chats because they would
+ * switch or exit the locked session. The Web UI is the only authorized way to
+ * change or unbind an Agent binding.
+ */
+const LOCK_SLASH_COMMANDS = new Set<string>(['/exit', '/goto', '/add']);
+
+/** Extract the first token of a slash command, or '' when text is not a slash. */
+function firstToken(text: string): string {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('/')) return '';
+  return trimmed.split(/\s+/)[0]!.toLowerCase();
+}
+
+/**
+ * Decide whether an Agent should respond to an inbound message in a group chat.
+ * - Direct messages: always true.
+ * - Groups / channels: require an `AgentGroupChatConfig` on the agent. When
+ *   `requireMention` is true (default), the message text must contain one of
+ *   the configured mention patterns (case-insensitive).
+ */
+function shouldRespondInGroup(
+  agent: AgentDefinition,
+  msg: InboundChannelMessage,
+): boolean {
+  if (msg.identity.peerKind === 'direct') return true;
+  const gc = agent.groupChat;
+  if (!gc) return false;
+  if (!gc.requireMention) return true;
+  const lower = msg.text.toLowerCase();
+  return gc.mentionPatterns.some((p) => lower.includes(p.toLowerCase()));
+}
 
 /** Per-identity stream state for buffered think-tag typing */
 interface StreamState {
@@ -109,6 +145,7 @@ export class ChannelRouterImpl implements ChannelRouter {
   constructor(
     private sessionManager: SessionManager,
     private lobbyManager: LobbyManager | null,
+    private agentRegistry: AgentRegistry,
     private db: Database.Database,
   ) {
     this.sessionManager.onMessage('channel-router', this.handleSessionMessage.bind(this));
@@ -286,6 +323,36 @@ export class ChannelRouterImpl implements ChannelRouter {
     deleteBinding(this.db, identityKey);
   }
 
+  /**
+   * Upsert a binding with an explicit target and optional agentId. Used by the
+   * WebSocket `channel.bind` handler when the UI binds a channel identity to
+   * either the Lobby Manager, a specific session, or an Agent template.
+   */
+  async bindIdentity(
+    identity: ChannelIdentity,
+    target: 'lobby-manager' | string,
+    agentId?: string,
+  ): Promise<ChannelBinding> {
+    const identityKey = toIdentityKey(identity);
+    const existing = getBinding(this.db, identityKey);
+    const now = Date.now();
+    const row: ChannelBindingRow = {
+      identity_key: identityKey,
+      channel_name: identity.channelName,
+      account_id: identity.accountId,
+      peer_id: identity.peerId,
+      peer_display_name: identity.peerDisplayName ?? existing?.peer_display_name ?? null,
+      peer_kind: identity.peerKind ?? existing?.peer_kind ?? 'direct',
+      target,
+      active_session_id: existing?.active_session_id ?? null,
+      agent_id: agentId ?? null,
+      created_at: existing?.created_at ?? now,
+      last_active_at: now,
+    };
+    upsertBinding(this.db, row);
+    return rowToBinding(row);
+  }
+
   // ─── Inbound Message Handling ────────────────────────────────────
 
   async handleInbound(msg: InboundChannelMessage): Promise<void> {
@@ -294,6 +361,96 @@ export class ChannelRouterImpl implements ChannelRouter {
 
     if (msg.callbackData) {
       await this.handleCallback(msg.callbackData, msg.identity);
+      return;
+    }
+
+    // Resolve binding first so the Agent branch can intercept slash commands
+    // and enforce the mention rule BEFORE any generic slash-command processing.
+    let binding = getBinding(this.db, identityKey);
+    if (!binding) {
+      binding = this.createDefaultBinding(msg.identity);
+    }
+
+    // Sync peerKind on every inbound — provider is the source of truth
+    // (e.g. a peer that moved a DM into a group will show a different peerKind).
+    if (binding.peer_kind !== msg.identity.peerKind) {
+      this.db.prepare('UPDATE channel_bindings SET peer_kind = ? WHERE identity_key = ?')
+        .run(msg.identity.peerKind, identityKey);
+      binding.peer_kind = msg.identity.peerKind;
+    }
+
+    // ── AGENT PATH ─────────────────────────────────────────────
+    // When the binding points at an Agent definition, routing is locked:
+    // slash commands that would switch sessions are rejected, group-chat
+    // mention rules gate whether we respond at all, and every other inbound
+    // goes straight into the per-peer Agent session.
+    if (binding.agent_id) {
+      const agent = this.agentRegistry.get(binding.agent_id);
+      if (!agent) {
+        await this.sendToChannel(
+          msg.identity,
+          `⚠️ Agent not found (id=${binding.agent_id}). Please rebind via the OpenLobby Web UI.`,
+        );
+        return;
+      }
+      if (agent.deletedAt != null) {
+        await this.sendToChannel(
+          msg.identity,
+          `🚫 Agent "${agent.displayName}" has been removed. Ask an admin to recover it in the OpenLobby Web UI.`,
+        );
+        return;
+      }
+
+      // Reject session-switching slash commands
+      const cmd = firstToken(msg.text);
+      if (LOCK_SLASH_COMMANDS.has(cmd)) {
+        await this.sendToChannel(
+          msg.identity,
+          `This chat is bound to Agent "${agent.displayName}" and cannot switch sessions. ` +
+            `Use the OpenLobby Web UI to change or unbind.`,
+        );
+        return;
+      }
+
+      // Group-chat mention rule — silently drop when agent shouldn't respond
+      if (!shouldRespondInGroup(agent, msg)) {
+        return;
+      }
+
+      // Spawn or reuse the per-peer Agent session
+      const session = await this.sessionManager.getOrCreateAgentSession(agent, msg.identity);
+
+      // Keep the binding in sync: point target + active_session_id at the
+      // concrete session. target may still be 'lobby-manager' from the
+      // initial Web UI bind, so upsert the full row here.
+      const now = Date.now();
+      upsertBinding(this.db, {
+        identity_key: identityKey,
+        channel_name: binding.channel_name,
+        account_id: binding.account_id,
+        peer_id: binding.peer_id,
+        peer_display_name: binding.peer_display_name,
+        peer_kind: binding.peer_kind,
+        target: session.id,
+        active_session_id: session.id,
+        agent_id: binding.agent_id,
+        created_at: binding.created_at,
+        last_active_at: now,
+      });
+      binding.target = session.id;
+      binding.active_session_id = session.id;
+      binding.last_active_at = now;
+
+      this.lastSenderBySession.set(session.id, identityKey);
+      this.messageOriginBySession.set(session.id, 'im');
+
+      try {
+        await this.sessionManager.sendMessage(session.id, msg.text);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[ChannelRouter] Agent session send failed:`, errMsg);
+        await this.sendToChannel(msg.identity, `⚠️ Agent 消息发送失败: ${errMsg}`);
+      }
       return;
     }
 
@@ -306,11 +463,6 @@ export class ChannelRouterImpl implements ChannelRouter {
         return;
       }
       // null means unknown command — fall through to normal routing
-    }
-
-    let binding = getBinding(this.db, identityKey);
-    if (!binding) {
-      binding = this.createDefaultBinding(msg.identity);
     }
 
     const sessionId = this.resolveSessionId(binding);

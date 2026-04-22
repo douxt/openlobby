@@ -121,7 +121,7 @@ export async function createServer(options: ServerOptions = {}) {
   const ptyManager = new PtyManager();
 
   // Initialize Channel Router and inject into MCP API
-  const channelRouter = new ChannelRouterImpl(sessionManager, lobbyManager, db);
+  const channelRouter = new ChannelRouterImpl(sessionManager, lobbyManager, agentRegistry, db);
   mcpApi.setChannelRouter(channelRouter);
 
   // Load configured channel providers from DB and start them

@@ -90,7 +90,7 @@ describe('ChannelRouter telegram msg-tidy routing', () => {
     });
 
     const sent: Array<{ text: string; kind?: string }> = [];
-    const router = new ChannelRouterImpl(createSessionManagerStub() as any, null, db);
+    const router = new ChannelRouterImpl(createSessionManagerStub() as any, null, {} as any, db);
     await router.registerProvider(createTelegramProvider(sent));
 
     (router as any).streamStates.set('telegram:SawOpenLobbyBot:342506780', {
@@ -141,7 +141,7 @@ describe('ChannelRouter telegram msg-tidy routing', () => {
     });
 
     const sent: Array<{ text: string; kind?: string }> = [];
-    const router = new ChannelRouterImpl(createSessionManagerStub() as any, null, db);
+    const router = new ChannelRouterImpl(createSessionManagerStub() as any, null, {} as any, db);
     await router.registerProvider(createTelegramProvider(sent));
 
     (router as any).handleSessionMessage(
