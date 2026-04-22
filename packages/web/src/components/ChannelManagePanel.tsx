@@ -9,6 +9,7 @@ import {
   wsToggleProvider,
   wsListBindings,
   wsUnbind,
+  wsChannelBind,
   wsWecomQrStart,
   wsWecomQrCancel,
 } from '../hooks/useWebSocket';
@@ -132,26 +133,7 @@ export default function ChannelManagePanel({ onClose }: Props) {
               )}
 
               {bindings.map((b) => (
-                <div
-                  key={b.identityKey}
-                  className="flex items-center justify-between bg-surface-elevated rounded-lg p-3"
-                >
-                  <div>
-                    <div className="text-on-surface text-sm">
-                      {b.peerDisplayName ?? b.peerId}
-                      <span className="text-on-surface-muted text-xs ml-2">({b.channelName})</span>
-                    </div>
-                    <div className="text-on-surface-muted text-xs mt-0.5">
-                      {t('channelManage.target')}: {b.target === 'lobby-manager' ? 'LM' : b.activeSessionId?.slice(0, 8) ?? b.target.slice(0, 8)}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => wsUnbind(b.identityKey)}
-                    className="text-on-surface-secondary hover:text-danger text-xs"
-                  >
-                    {t('channelManage.unbind')}
-                  </button>
-                </div>
+                <BindingRow key={b.identityKey} binding={b} />
               ))}
             </>
           )}
@@ -415,5 +397,165 @@ function AddProviderForm({ onDone }: { onDone: () => void }) {
         </button>
       </div>
     </form>
+  );
+}
+
+type BindingTargetKind = 'lobby-manager' | 'session' | 'agent';
+
+function BindingRow({
+  binding,
+}: {
+  binding: import('../stores/lobby-store').ChannelBindingData;
+}) {
+  const { t } = useI18nContext();
+  const agents = useLobbyStore((s) => s.agents);
+  const deletedAgents = useLobbyStore((s) => s.deletedAgents);
+  const sessions = useLobbyStore((s) => s.sessions);
+
+  const initialKind: BindingTargetKind = binding.agentId
+    ? 'agent'
+    : binding.target === 'lobby-manager'
+      ? 'lobby-manager'
+      : 'session';
+
+  const [editing, setEditing] = useState(false);
+  const [kind, setKind] = useState<BindingTargetKind>(initialKind);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(binding.agentId ?? '');
+  const [selectedSessionId, setSelectedSessionId] = useState<string>(
+    binding.target !== 'lobby-manager' ? binding.target : '',
+  );
+
+  const boundAgent =
+    (binding.agentId && agents.find((a) => a.id === binding.agentId)) ||
+    (binding.agentId && deletedAgents.find((a) => a.id === binding.agentId)) ||
+    undefined;
+
+  const sessionList = Object.values(sessions).filter((s) => s.origin !== 'lobby-manager');
+
+  const canSave = (() => {
+    if (kind === 'lobby-manager') return true;
+    if (kind === 'agent') return !!selectedAgentId;
+    if (kind === 'session') return !!selectedSessionId;
+    return false;
+  })();
+
+  const handleSave = () => {
+    if (kind === 'lobby-manager') {
+      wsChannelBind(binding.identityKey, 'lobby-manager');
+    } else if (kind === 'agent') {
+      wsChannelBind(binding.identityKey, 'lobby-manager', selectedAgentId);
+    } else {
+      wsChannelBind(binding.identityKey, selectedSessionId);
+    }
+    setEditing(false);
+  };
+
+  return (
+    <div className="bg-surface-elevated rounded-lg p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="min-w-0">
+          <div className="text-on-surface text-sm truncate">
+            {binding.peerDisplayName ?? binding.peerId}
+            <span className="text-on-surface-muted text-xs ml-2">({binding.channelName})</span>
+          </div>
+          <div className="text-on-surface-muted text-xs mt-0.5 flex items-center gap-2 flex-wrap">
+            <span>
+              {t('channelManage.target')}:{' '}
+              {binding.agentId
+                ? 'Agent'
+                : binding.target === 'lobby-manager'
+                  ? 'LM'
+                  : binding.activeSessionId?.slice(0, 8) ?? binding.target.slice(0, 8)}
+            </span>
+            {binding.agentId && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full border bg-purple-900/40 text-purple-200 border-purple-500/50 font-medium">
+                &#x1F916; {boundAgent?.displayName ?? binding.agentId}
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => setEditing((v) => !v)}
+            className="text-on-surface-secondary hover:text-on-surface text-xs"
+          >
+            {editing ? t('common.cancel') : 'Edit'}
+          </button>
+          <button
+            onClick={() => wsUnbind(binding.identityKey)}
+            className="text-on-surface-secondary hover:text-danger text-xs"
+          >
+            {t('channelManage.unbind')}
+          </button>
+        </div>
+      </div>
+
+      {editing && (
+        <div className="border-t border-outline pt-2 space-y-2">
+          <div>
+            <label className="block text-xs text-on-surface-secondary mb-1">Target</label>
+            <select
+              value={kind}
+              onChange={(e) => setKind(e.target.value as BindingTargetKind)}
+              className="w-full bg-surface border border-outline rounded px-2 py-1 text-xs text-on-surface"
+            >
+              <option value="lobby-manager">Lobby Manager</option>
+              <option value="session">Specific session</option>
+              <option value="agent">Agent</option>
+            </select>
+          </div>
+
+          {kind === 'agent' && (
+            <div>
+              <label className="block text-xs text-on-surface-secondary mb-1">Agent</label>
+              <select
+                value={selectedAgentId}
+                onChange={(e) => setSelectedAgentId(e.target.value)}
+                className="w-full bg-surface border border-outline rounded px-2 py-1 text-xs text-on-surface"
+              >
+                <option value="">— select agent —</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.displayName} ({a.id})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {kind === 'session' && (
+            <div>
+              <label className="block text-xs text-on-surface-secondary mb-1">Session</label>
+              <select
+                value={selectedSessionId}
+                onChange={(e) => setSelectedSessionId(e.target.value)}
+                className="w-full bg-surface border border-outline rounded px-2 py-1 text-xs text-on-surface"
+              >
+                <option value="">— select session —</option>
+                {sessionList.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.displayName} ({s.id.slice(0, 8)})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div className="flex justify-end">
+            <button
+              onClick={handleSave}
+              disabled={!canSave}
+              className={`px-3 py-1 rounded text-xs ${
+                canSave
+                  ? 'bg-primary text-primary-on hover:bg-primary-hover'
+                  : 'bg-surface-elevated text-on-surface-muted cursor-not-allowed'
+              }`}
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

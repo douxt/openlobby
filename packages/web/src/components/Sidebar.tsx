@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLobbyStore } from '../stores/lobby-store';
 import type { SessionSummaryData } from '../stores/lobby-store';
 import { wsRequestSessionHistory, wsDiscoverSessions, wsPinSession, wsRenameSession } from '../hooks/useWebSocket';
@@ -43,6 +43,13 @@ function SessionCard({
   onRename: (name: string) => void;
 }) {
   const { t } = useI18nContext();
+  const agentName = useLobbyStore((s) => {
+    if (!session.agentId) return undefined;
+    const active = s.agents.find((a) => a.id === session.agentId);
+    if (active) return active.displayName;
+    const deleted = s.deletedAgents.find((a) => a.id === session.agentId);
+    return deleted?.displayName;
+  });
   const statusConfig: Record<string, { color: string; label: string; pulse?: boolean }> = {
     running: { color: 'bg-success', label: t('sidebar.statusRunning') },
     awaiting_approval: { color: 'bg-warning', label: t('sidebar.statusNeedsApproval'), pulse: true },
@@ -145,6 +152,14 @@ function SessionCard({
             📌
           </span>
         )}
+        {session.agentId && (
+          <span
+            className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border bg-purple-900/40 text-purple-200 border-purple-500/50 font-medium max-w-[96px] truncate"
+            title={agentName ? `Agent: ${agentName}` : 'Agent'}
+          >
+            &#x1F916; {agentName ?? 'Agent'}
+          </span>
+        )}
         {isAwaiting ? (
           <span className="shrink-0 text-[10px] text-warning bg-warning-surface px-1.5 py-0.5 rounded font-medium animate-pulse">
             {t('sidebar.approval')}
@@ -195,6 +210,14 @@ export default function Sidebar() {
   const [showAgentsPanel, setShowAgentsPanel] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const agentsCount = useLobbyStore((s) => s.agents.length);
+  const agentsPanelRequest = useLobbyStore((s) => s.agentsPanelRequest);
+  const dismissAgentsPanel = useLobbyStore((s) => s.dismissAgentsPanel);
+
+  useEffect(() => {
+    if (agentsPanelRequest) {
+      setShowAgentsPanel(true);
+    }
+  }, [agentsPanelRequest]);
   const channelProviders = useLobbyStore((s) => s.channelProviders);
   const { theme, setTheme } = useThemeContext();
   const { locale, setLocale, t } = useI18nContext();
@@ -373,7 +396,13 @@ export default function Sidebar() {
         <ChannelManagePanel onClose={() => setShowChannelPanel(false)} />
       )}
       {showAgentsPanel && (
-        <AgentsPanel onClose={() => setShowAgentsPanel(false)} />
+        <AgentsPanel
+          highlightId={agentsPanelRequest?.highlightId}
+          onClose={() => {
+            setShowAgentsPanel(false);
+            dismissAgentsPanel();
+          }}
+        />
       )}
       {showSettingsDialog && (
         <GlobalSettingsDialog onClose={() => setShowSettingsDialog(false)} />

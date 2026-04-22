@@ -497,7 +497,21 @@ export function wsBind(identityKey: string, target: string): void {
   wsSend({ type: 'channel.bind', identityKey, target });
 }
 
+export function wsChannelBind(
+  identityKey: string,
+  target: 'lobby-manager' | string,
+  agentId?: string,
+): void {
+  const payload: Record<string, unknown> = { type: 'channel.bind', identityKey, target };
+  if (agentId) payload.agentId = agentId;
+  wsSend(payload);
+}
+
 export function wsUnbind(identityKey: string): void {
+  wsSend({ type: 'channel.unbind', identityKey });
+}
+
+export function wsChannelUnbind(identityKey: string): void {
   wsSend({ type: 'channel.unbind', identityKey });
 }
 

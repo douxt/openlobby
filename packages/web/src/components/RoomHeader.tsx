@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { useLobbyStore } from '../stores/lobby-store';
-import { wsDestroySession, wsConfigureSession, wsOpenTerminal } from '../hooks/useWebSocket';
+import {
+  wsDestroySession,
+  wsConfigureSession,
+  wsOpenTerminal,
+  wsChannelUnbind,
+} from '../hooks/useWebSocket';
 import { useI18nContext } from '../contexts/I18nContext';
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -37,6 +42,17 @@ export default function RoomHeader() {
   const setViewMode = useLobbyStore((s) => s.setViewMode);
   const adapterMeta = useLobbyStore((s) => s.adapterPermissionMeta);
   const adapterDefaults = useLobbyStore((s) => s.adapterDefaults);
+  const agent = useLobbyStore((s) => {
+    if (!session?.agentId) return undefined;
+    return (
+      s.agents.find((a) => a.id === session.agentId) ??
+      s.deletedAgents.find((a) => a.id === session.agentId)
+    );
+  });
+  const agentBinding = useLobbyStore((s) =>
+    session ? s.channelBindings.find((b) => b.activeSessionId === session.id) : undefined,
+  );
+  const openAgentsPanel = useLobbyStore((s) => s.openAgentsPanel);
   const terminalFailDialog = useLobbyStore((s) => s.terminalFailDialog);
   const setTerminalFailDialog = useLobbyStore((s) => s.setTerminalFailDialog);
   const [showSettings, setShowSettings] = useState(false);
@@ -48,8 +64,21 @@ export default function RoomHeader() {
 
   if (!activeSessionId || !session) return null;
 
+  const isAgentSession = !!session.agentId;
+
   const handleDestroy = () => {
     setShowDestroyConfirm(true);
+  };
+
+  const handleUnbindPeer = () => {
+    if (agentBinding) {
+      wsChannelUnbind(agentBinding.identityKey);
+      setShowSettings(false);
+    }
+  };
+
+  const handleViewAgent = () => {
+    if (session.agentId) openAgentsPanel(session.agentId);
   };
 
   const confirmDestroy = () => {
@@ -104,13 +133,28 @@ export default function RoomHeader() {
 
   return (
     <div className="bg-surface-secondary border-b border-outline px-4 py-2 flex items-center justify-between relative">
-      <div className="flex items-center gap-3 min-w-0">
+      <div className="flex items-center gap-3 min-w-0 flex-wrap">
         <h2 className="text-sm font-semibold text-on-surface truncate">
           {session.displayName}
         </h2>
         <span className="text-xs text-on-surface-secondary bg-surface-elevated px-2 py-0.5 rounded">
           {adapterLabel}
         </span>
+        {isAgentSession && (
+          <span
+            className="text-[11px] px-2 py-0.5 rounded-full border bg-purple-900/40 text-purple-200 border-purple-500/50 font-medium flex items-center gap-1"
+            title={agent ? agent.description : undefined}
+          >
+            &#x1F916; Agent: {agent?.displayName ?? session.agentId}
+            <button
+              onClick={handleViewAgent}
+              className="ml-1 underline decoration-dotted text-purple-100 hover:text-white"
+              title="Open AgentsPanel"
+            >
+              View Agent
+            </button>
+          </span>
+        )}
         {(() => {
           const badgeConfig: Record<string, { color: string; label: string }> = {
             auto: { color: 'text-success bg-success-surface border-success/30', label: t('roomHeader.auto') },
@@ -249,7 +293,7 @@ export default function RoomHeader() {
               </button>
             </div>
 
-            {!isLM && (
+            {!isLM && !isAgentSession && (
               <div className="border-t border-outline pt-2">
                 <button
                   onClick={handleDestroy}
@@ -257,6 +301,27 @@ export default function RoomHeader() {
                 >
                   {t('roomHeader.removeSession')}
                 </button>
+              </div>
+            )}
+            {!isLM && isAgentSession && agentBinding && (
+              <div className="border-t border-outline pt-2 space-y-1">
+                <button
+                  onClick={handleUnbindPeer}
+                  className="text-xs text-danger hover:text-danger-hover"
+                  title={`Unbind ${agentBinding.peerDisplayName ?? agentBinding.peerId} from this Agent`}
+                >
+                  Unbind Peer ({agentBinding.peerDisplayName ?? agentBinding.peerId})
+                </button>
+                <p className="text-[10px] text-on-surface-muted">
+                  Agent sessions are managed from the Agents panel. Deletion happens there.
+                </p>
+              </div>
+            )}
+            {!isLM && isAgentSession && !agentBinding && (
+              <div className="border-t border-outline pt-2">
+                <p className="text-[10px] text-on-surface-muted">
+                  Agent sessions are managed from the Agents panel.
+                </p>
               </div>
             )}
           </div>

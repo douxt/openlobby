@@ -11,9 +11,11 @@ import AgentEditDialog from './AgentEditDialog';
 
 interface Props {
   onClose: () => void;
+  /** Optional agent id to highlight/focus when the panel opens. */
+  highlightId?: string;
 }
 
-export default function AgentsPanel({ onClose }: Props) {
+export default function AgentsPanel({ onClose, highlightId }: Props) {
   const agents = useLobbyStore((s) => s.agents);
   const deletedAgents = useLobbyStore((s) => s.deletedAgents);
 
@@ -24,6 +26,19 @@ export default function AgentsPanel({ onClose }: Props) {
   useEffect(() => {
     wsAgentList(true);
   }, []);
+
+  useEffect(() => {
+    if (!highlightId) return;
+    const inDeleted = deletedAgents.some((a) => a.id === highlightId);
+    if (inDeleted) setTab('deleted');
+    // Best-effort scroll-into-view after layout
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(
+        `[data-agent-row="${highlightId}"]`,
+      );
+      el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    });
+  }, [highlightId, agents, deletedAgents]);
 
   const rows = tab === 'active' ? agents : deletedAgents;
   const dialogOpen = creating || editTarget !== null;
@@ -98,6 +113,7 @@ export default function AgentsPanel({ onClose }: Props) {
             <AgentRow
               key={agent.id}
               agent={agent}
+              highlighted={agent.id === highlightId}
               deleted={tab === 'deleted'}
               onEdit={() => {
                 setCreating(false);
@@ -136,6 +152,7 @@ function permissionSummary(mode: string | undefined): string {
 function AgentRow({
   agent,
   deleted,
+  highlighted,
   onEdit,
   onDelete,
   onRecover,
@@ -143,6 +160,7 @@ function AgentRow({
 }: {
   agent: AgentDefinition;
   deleted: boolean;
+  highlighted?: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onRecover: () => void;
@@ -152,7 +170,12 @@ function AgentRow({
     (agent.allowedTools?.length ?? 0) + (agent.deniedTools?.length ?? 0);
 
   return (
-    <div className="flex items-center justify-between bg-gray-800 rounded-lg p-3">
+    <div
+      data-agent-row={agent.id}
+      className={`flex items-center justify-between bg-gray-800 rounded-lg p-3 ${
+        highlighted ? 'ring-2 ring-purple-500/60' : ''
+      }`}
+    >
       <div className="min-w-0 flex-1 pr-3">
         <div className="flex items-baseline gap-2">
           <span className="text-gray-100 text-sm font-medium truncate">

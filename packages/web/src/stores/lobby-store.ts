@@ -22,6 +22,8 @@ export interface SessionSummaryData {
     peerDisplayName?: string;
   };
   pinned?: boolean;
+  /** Set when this session was spawned from an AgentDefinition. */
+  agentId?: string;
 }
 
 export interface ChannelProviderData {
@@ -40,6 +42,8 @@ export interface ChannelBindingData {
   peerDisplayName?: string;
   target: string;
   activeSessionId: string | null;
+  /** When set, this binding is driven by an Agent template (locked). */
+  agentId?: string;
   createdAt: number;
   lastActiveAt: number;
 }
@@ -101,6 +105,11 @@ interface LobbyState {
   setAgents: (list: AgentDefinition[]) => void;
   upsertAgent: (agent: AgentDefinition) => void;
   removeAgent: (id: string) => void;
+
+  /** When set, the Sidebar opens the AgentsPanel; consumed and reset by the opener. */
+  agentsPanelRequest: { highlightId?: string } | null;
+  openAgentsPanel: (highlightId?: string) => void;
+  dismissAgentsPanel: () => void;
 
   commandsBySession: Record<string, Array<{ name: string; description: string; args?: string }>>;
   commandsLoadingBySession: Record<string, boolean>;
@@ -226,6 +235,10 @@ export const useLobbyStore = create<LobbyState>((set) => ({
       agents: state.agents.filter((a) => a.id !== id),
       deletedAgents: state.deletedAgents.filter((a) => a.id !== id),
     })),
+
+  agentsPanelRequest: null,
+  openAgentsPanel: (highlightId) => set({ agentsPanelRequest: { highlightId } }),
+  dismissAgentsPanel: () => set({ agentsPanelRequest: null }),
 
   commandsBySession: {},
   commandsLoadingBySession: {},
