@@ -49,6 +49,10 @@ export interface SpawnOptions {
   mcpServers?: Record<string, McpServerConfig>;
   /** API key to authenticate with the Claude API (injected as ANTHROPIC_AUTH_TOKEN) */
   apiKey?: string;
+  /** Tool allow-list. If set, only these tools can be invoked. */
+  allowedTools?: string[];
+  /** Tool deny-list. Takes precedence over allow-list. */
+  deniedTools?: string[];
 }
 
 export interface ResumeOptions extends Partial<SpawnOptions> {

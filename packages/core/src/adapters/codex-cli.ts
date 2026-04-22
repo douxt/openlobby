@@ -18,6 +18,7 @@ import type {
   AdapterPermissionMeta,
 } from '../types.js';
 import { detectInstalledBinary, findExecutable } from './command-utils.js';
+import { enforceToolPolicy } from './policy.js';
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -628,6 +629,30 @@ class CodexCliProcess extends EventEmitter implements AgentProcess {
         JSON.stringify(toolInput, null, 2),
         { toolName: typeof toolName === 'string' ? toolName : String(toolName) },
       ));
+
+      const toolNameStr = typeof toolName === 'string' ? toolName : String(toolName);
+
+      // Agent policy gate — runs BEFORE mode logic so policy deny is stricter
+      // than the adapter's auto/readonly/supervised mode.
+      const policyDecision = enforceToolPolicy(toolNameStr, {
+        allowedTools: this.spawnOptions.allowedTools,
+        deniedTools: this.spawnOptions.deniedTools,
+      });
+      if (policyDecision.decision === 'deny') {
+        console.log('[Codex] Policy deny:', toolNameStr, policyDecision.reason);
+        this.writeRaw({
+          jsonrpc: '2.0',
+          id: msg.id,
+          result: { decision: 'decline' },
+        });
+        this.emit('message', makeLobbyMessage(
+          this.sessionId,
+          'tool_result',
+          `[Policy] ${policyDecision.reason}`,
+          { toolName: toolNameStr, isError: true },
+        ));
+        return;
+      }
 
       const mode = this.spawnOptions.permissionMode ?? 'supervised';
 

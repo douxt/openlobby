@@ -17,16 +17,17 @@ import type {
   AdapterPermissionMeta,
 } from '../types.js';
 import { detectInstalledBinary, findExecutable } from './command-utils.js';
+import { enforceToolPolicy } from './policy.js';
 
-/** Claude Code-specific spawn options (extends shared SpawnOptions) */
-export interface ClaudeCodeSpawnOptions extends SpawnOptions {
-  /**
-   * Tools that are auto-allowed without triggering canUseTool.
-   * Claude Code SDK-specific — other adapters do not use this.
-   * Defaults to ['Read', 'Glob', 'Grep'] if not provided.
-   */
-  allowedTools?: string[];
-}
+/**
+ * Claude Code-specific spawn options (extends shared SpawnOptions).
+ *
+ * Note: `allowedTools` is inherited from the shared `SpawnOptions`. For Claude
+ * Code, tools listed in `allowedTools` are auto-allowed without triggering
+ * `canUseTool`. Defaults to ['Read', 'Glob', 'Grep'] when neither
+ * `allowedTools` nor `deniedTools` is provided.
+ */
+export type ClaudeCodeSpawnOptions = SpawnOptions;
 
 /**
  * Extract the JavaScript entrypoint from a Windows npm `cmd-shim` file.
@@ -391,6 +392,14 @@ class ClaudeCodeProcess extends EventEmitter implements AgentProcess {
       // corrupts the --mcp-config JSON argument).
       const executableResolution = resolveClaudeExecutable(this.claudeCliPath);
 
+      // Agent policy gate: when ANY policy is configured (allow-list OR
+      // deny-list), force the SDK's `allowedTools` to be empty so every tool
+      // invocation flows through `canUseTool` / `enforceToolPolicy`. The
+      // SDK's own `allowedTools` parameter short-circuits `canUseTool`, which
+      // would otherwise let deny-listed tools execute silently.
+      const hasPolicy = !!(this.spawnOptions.allowedTools || this.spawnOptions.deniedTools);
+      const queryAllowed = hasPolicy ? [] : (this.spawnOptions.allowedTools ?? [...READONLY_TOOLS]);
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const queryOpts: any = {
         // Point SDK to the real Claude CLI binary (avoids bundled-path mismatch).
@@ -458,10 +467,10 @@ class ClaudeCodeProcess extends EventEmitter implements AgentProcess {
         // Load user/project/local settings so MCP servers, skills, hooks, etc. are available
         // (without this, SDK runs in isolation mode and ignores all configured tools)
         settingSources: ['user', 'project', 'local'],
-        // Only auto-allow read-only tools; Write/Edit/Bash require approval via canUseTool
-        allowedTools: this.spawnOptions.allowedTools ?? [
-          'Read', 'Glob', 'Grep',
-        ],
+        // Only auto-allow read-only tools; Write/Edit/Bash require approval via canUseTool.
+        // When a tool policy is configured we pass [] so every tool routes through
+        // canUseTool → enforceToolPolicy (see queryAllowed above).
+        allowedTools: queryAllowed,
         cwd: this.spawnOptions.cwd,
         abortController: this.abortController,
         // Map unified PermissionMode to Claude SDK native value
@@ -653,6 +662,22 @@ class ClaudeCodeProcess extends EventEmitter implements AgentProcess {
     interrupt?: boolean;
     toolUseID?: string;
   }> {
+    // Agent policy gate — runs BEFORE mode logic so policy deny is stricter
+    // than the adapter's auto/readonly/supervised mode.
+    const policyDecision = enforceToolPolicy(toolName, {
+      allowedTools: this.spawnOptions.allowedTools,
+      deniedTools: this.spawnOptions.deniedTools,
+    });
+    if (policyDecision.decision === 'deny') {
+      console.log('[ClaudeCode] Policy deny:', toolName, policyDecision.reason);
+      return Promise.resolve({
+        behavior: 'deny',
+        message: policyDecision.reason,
+        interrupt: true,
+        toolUseID,
+      });
+    }
+
     const mode = this.spawnOptions.permissionMode ?? 'supervised';
 
     // Auto mode: approve everything immediately
@@ -897,7 +922,8 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       cwd: options?.cwd ?? process.cwd(),
       systemPrompt: options?.systemPrompt,
       permissionMode: options?.permissionMode,
-      allowedTools: (options as ClaudeCodeSpawnOptions | undefined)?.allowedTools,
+      allowedTools: options?.allowedTools,
+      deniedTools: options?.deniedTools,
       mcpServers: options?.mcpServers,
       model: options?.model,
     }, cliPath);

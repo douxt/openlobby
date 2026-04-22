@@ -18,6 +18,7 @@ import type {
   AdapterPermissionMeta,
 } from '../types.js';
 import { detectInstalledBinary } from './command-utils.js';
+import { enforceToolPolicy } from './policy.js';
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -503,6 +504,30 @@ class GsdProcess extends EventEmitter implements AgentProcess {
     const mode = this.spawnOptions.permissionMode ?? 'supervised';
 
     console.log('[GSD] Extension UI request:', toolName, 'id:', requestId, 'mode:', mode);
+
+    const toolNameStr = typeof toolName === 'string' ? toolName : String(toolName);
+
+    // Agent policy gate — runs BEFORE mode logic so policy deny is stricter
+    // than the adapter's auto/readonly/supervised mode.
+    const policyDecision = enforceToolPolicy(toolNameStr, {
+      allowedTools: this.spawnOptions.allowedTools,
+      deniedTools: this.spawnOptions.deniedTools,
+    });
+    if (policyDecision.decision === 'deny') {
+      console.log('[GSD] Policy deny:', toolNameStr, policyDecision.reason);
+      this.writeJsonl({
+        type: 'extension_ui_response',
+        request_id: requestId,
+        decision: 'deny',
+      });
+      this.emit('message', makeLobbyMessage(
+        this.sessionId,
+        'tool_result',
+        `[Policy] ${policyDecision.reason}`,
+        { toolName: toolNameStr, isError: true },
+      ));
+      return;
+    }
 
     // Auto mode: immediately approve
     if (mode === 'auto') {

@@ -16,6 +16,7 @@ import type {
   AdapterPermissionMeta,
 } from '../types.js';
 import { detectInstalledBinary } from './command-utils.js';
+import { enforceToolPolicy } from './policy.js';
 
 // ──────────────────────────────────────────────
 // Helpers
@@ -308,6 +309,36 @@ class OpenCodeProcess extends EventEmitter implements AgentProcess {
       ?? 'unknown';
 
     console.log('[OpenCode] Permission requested:', toolName, 'id:', props.id, 'mode:', mode);
+
+    const toolNameStr = typeof toolName === 'string' ? toolName : String(toolName);
+
+    // Agent policy gate — runs BEFORE mode logic so policy deny is stricter
+    // than the adapter's auto/readonly/supervised mode.
+    const policyDecision = enforceToolPolicy(toolNameStr, {
+      allowedTools: this.spawnOptions.allowedTools,
+      deniedTools: this.spawnOptions.deniedTools,
+    });
+    if (policyDecision.decision === 'deny') {
+      console.log('[OpenCode] Policy deny:', toolNameStr, policyDecision.reason);
+      this.client
+        .postSessionIdPermissionsPermissionId({
+          path: { id: this.sessionId, permissionID: props.id },
+          body: { response: 'reject' },
+        })
+        .catch((err: unknown) => {
+          console.warn('[OpenCode] Policy-deny reject failed:', err);
+        });
+      this.emit(
+        'message',
+        makeLobbyMessage(
+          this.sessionId,
+          'tool_result',
+          `[Policy] ${policyDecision.reason}`,
+          { toolName: toolNameStr, isError: true },
+        ),
+      );
+      return;
+    }
 
     // Auto mode: immediately approve
     if (mode === 'auto') {
