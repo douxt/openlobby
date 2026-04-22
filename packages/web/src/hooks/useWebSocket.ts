@@ -7,6 +7,20 @@ import type {
   ChannelProviderData,
   ChannelBindingData,
 } from '../stores/lobby-store';
+import type { AgentDefinition } from '@openlobby/core';
+
+export type AgentCreatePayload = Omit<AgentDefinition, 'createdAt' | 'updatedAt' | 'deletedAt'>;
+export type AgentUpdatePayload = Partial<Omit<AgentDefinition, 'id' | 'createdAt' | 'updatedAt'>>;
+
+/** Listeners for `{ type: 'error' }` server replies. Each returns a disposer. */
+const errorListeners = new Set<(message: string) => void>();
+
+export function onWsError(listener: (message: string) => void): () => void {
+  errorListeners.add(listener);
+  return () => {
+    errorListeners.delete(listener);
+  };
+}
 
 interface ServerMessage {
   type: string;
@@ -28,6 +42,12 @@ interface ServerMessage {
   identityKey?: string;
   commands?: Array<{ name: string; description: string; args?: string }>;
   cached?: boolean;
+  // Agent messages
+  agents?: AgentDefinition[];
+  agent?: AgentDefinition;
+  id?: string;
+  hard?: boolean;
+  includesDeleted?: boolean;
 }
 
 /**
@@ -63,6 +83,7 @@ function ensureConnection(url: string) {
     wsSend({ type: 'config.get', key: 'defaultAdapter' });
     wsSend({ type: 'config.get', key: 'defaultMessageMode' });
     wsSend({ type: 'config.get', key: 'defaultViewMode' });
+    wsAgentList(true);
   };
 
   ws.onclose = () => {
@@ -314,8 +335,33 @@ function ensureConnection(url: string) {
         }
         break;
 
+      case 'agent.list':
+        if (data.agents) {
+          state.setAgents(data.agents);
+        }
+        break;
+      case 'agent.updated':
+        if (data.agent) {
+          state.upsertAgent(data.agent);
+        }
+        break;
+      case 'agent.deleted':
+        if (data.id && data.hard) {
+          state.removeAgent(data.id);
+        }
+        break;
+
       case 'error':
         console.error('[WS] Server error:', data.error);
+        if (data.error) {
+          for (const listener of errorListeners) {
+            try {
+              listener(data.error);
+            } catch (err) {
+              console.error('[WS] error listener threw', err);
+            }
+          }
+        }
         break;
     }
   };
@@ -457,6 +503,32 @@ export function wsUnbind(identityKey: string): void {
 
 export function wsCompactSession(sessionId: string): void {
   wsSend({ type: 'compact', sessionId });
+}
+
+// ---- Agent send helpers ----
+
+export function wsAgentList(includeDeleted = true): void {
+  wsSend({ type: 'agent.list', includeDeleted });
+}
+
+export function wsAgentCreate(definition: AgentCreatePayload): void {
+  wsSend({ type: 'agent.create', definition });
+}
+
+export function wsAgentUpdate(id: string, patch: AgentUpdatePayload): void {
+  wsSend({ type: 'agent.update', id, patch });
+}
+
+export function wsAgentDelete(id: string): void {
+  wsSend({ type: 'agent.delete', id });
+}
+
+export function wsAgentRecover(id: string): void {
+  wsSend({ type: 'agent.recover', id });
+}
+
+export function wsAgentHardDelete(id: string): void {
+  wsSend({ type: 'agent.hard-delete', id });
 }
 
 export function wsPinSession(sessionId: string, pinned: boolean): void {

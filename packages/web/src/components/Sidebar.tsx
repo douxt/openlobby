@@ -7,6 +7,7 @@ import { useI18nContext } from '../contexts/I18nContext';
 import type { Theme } from '../hooks/useTheme';
 import DiscoverDialog from './DiscoverDialog';
 import ChannelManagePanel from './ChannelManagePanel';
+import AgentsPanel from './AgentsPanel';
 import GlobalSettingsDialog from './GlobalSettingsDialog';
 import { useVersionCheck } from '../hooks/useVersionCheck';
 import { UpdateDialog } from './UpdateDialog';
@@ -191,7 +192,9 @@ export default function Sidebar() {
   const versionInfo = useVersionCheck();
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [showChannelPanel, setShowChannelPanel] = useState(false);
+  const [showAgentsPanel, setShowAgentsPanel] = useState(false);
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const agentsCount = useLobbyStore((s) => s.agents.length);
   const channelProviders = useLobbyStore((s) => s.channelProviders);
   const { theme, setTheme } = useThemeContext();
   const { locale, setLocale, t } = useI18nContext();
@@ -305,6 +308,21 @@ export default function Sidebar() {
           </button>
         </div>
 
+        <div className="px-4 py-2 border-t border-outline">
+          <button
+            onClick={() => setShowAgentsPanel(true)}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface-elevated text-on-surface-secondary hover:bg-[var(--color-sidebar-hover)] transition-colors"
+          >
+            <span>&#x1F916;</span>
+            <span className="font-medium">Agents</span>
+            {agentsCount > 0 && (
+              <span className="ml-auto text-xs text-on-surface-muted">
+                {agentsCount}
+              </span>
+            )}
+          </button>
+        </div>
+
         <div className="px-4 py-2 border-t border-outline flex items-center justify-between">
           <div className="flex items-center gap-1">
             <button
@@ -353,6 +371,9 @@ export default function Sidebar() {
       )}
       {showChannelPanel && (
         <ChannelManagePanel onClose={() => setShowChannelPanel(false)} />
+      )}
+      {showAgentsPanel && (
+        <AgentsPanel onClose={() => setShowAgentsPanel(false)} />
       )}
       {showSettingsDialog && (
         <GlobalSettingsDialog onClose={() => setShowSettingsDialog(false)} />

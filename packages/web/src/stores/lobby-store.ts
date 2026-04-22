@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { AgentDefinition } from '@openlobby/core';
 
 export interface SessionSummaryData {
   id: string;
@@ -94,6 +95,13 @@ interface LobbyState {
   channelProviders: ChannelProviderData[];
   channelBindings: ChannelBindingData[];
 
+  // Agent state
+  agents: AgentDefinition[];
+  deletedAgents: AgentDefinition[];
+  setAgents: (list: AgentDefinition[]) => void;
+  upsertAgent: (agent: AgentDefinition) => void;
+  removeAgent: (id: string) => void;
+
   commandsBySession: Record<string, Array<{ name: string; description: string; args?: string }>>;
   commandsLoadingBySession: Record<string, boolean>;
   setSessionCommands: (sessionId: string, commands: Array<{ name: string; description: string; args?: string }>, cached?: boolean) => void;
@@ -185,6 +193,39 @@ export const useLobbyStore = create<LobbyState>((set) => ({
 
   channelProviders: [],
   channelBindings: [],
+
+  agents: [],
+  deletedAgents: [],
+  setAgents: (list) =>
+    set(() => {
+      const active: AgentDefinition[] = [];
+      const deleted: AgentDefinition[] = [];
+      for (const a of list) {
+        if (a.deletedAt == null) active.push(a);
+        else deleted.push(a);
+      }
+      return { agents: active, deletedAgents: deleted };
+    }),
+  upsertAgent: (agent) =>
+    set((state) => {
+      const activeWithout = state.agents.filter((a) => a.id !== agent.id);
+      const deletedWithout = state.deletedAgents.filter((a) => a.id !== agent.id);
+      if (agent.deletedAt == null) {
+        return {
+          agents: [...activeWithout, agent],
+          deletedAgents: deletedWithout,
+        };
+      }
+      return {
+        agents: activeWithout,
+        deletedAgents: [...deletedWithout, agent],
+      };
+    }),
+  removeAgent: (id) =>
+    set((state) => ({
+      agents: state.agents.filter((a) => a.id !== id),
+      deletedAgents: state.deletedAgents.filter((a) => a.id !== id),
+    })),
 
   commandsBySession: {},
   commandsLoadingBySession: {},
