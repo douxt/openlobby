@@ -174,6 +174,49 @@ describe('SessionManager agent-session flows', () => {
     expect(adapter.spawnCount).toBe(1);
   });
 
+  it('keeps the agent-session index in sync after the CLI reports its real session id', async () => {
+    // Regression: syncSessionId previously only migrated this.sessions and
+    // messageCache — agentSessionIndex still pointed at the temp UUID. The
+    // next IM inbound therefore looked up a stale id and respawned a fresh
+    // session on EVERY message.
+    const def = registry.create({
+      id: 'persistent-id',
+      displayName: 'Persistent',
+      description: '',
+      adapter: 'stub',
+      contextFiles: [],
+    });
+
+    const first = await manager.getOrCreateAgentSession(def, identity);
+    const tempId = first.id;
+    expect(adapter.spawnCount).toBe(1);
+
+    // Simulate Claude Code / Codex CLI reporting its real session id a moment
+    // after spawn. This is exactly what the `init` / `system` event triggers
+    // via syncSessionId.
+    const proc = first.process as StubProcess;
+    proc.sessionId = 'real-cli-session-uuid-42';
+    proc.emit('message', {
+      id: 'm1',
+      sessionId: proc.sessionId,
+      timestamp: Date.now(),
+      type: 'system',
+      content: 'init',
+    });
+
+    // The ManagedSession id must now match the CLI's real id…
+    expect(first.id).toBe('real-cli-session-uuid-42');
+    expect(first.id).not.toBe(tempId);
+
+    // …and the next inbound for the same (agent, peer) pair must RETURN THE
+    // SAME SESSION, not spawn a second one.
+    const second = await manager.getOrCreateAgentSession(def, identity);
+
+    expect(second.id).toBe('real-cli-session-uuid-42');
+    expect(adapter.spawnCount).toBe(1);                // still only one spawn
+    expect(adapter.resumeCount).toBe(0);               // and no resume either
+  });
+
   it('forwards systemPrompt, allowedTools and deniedTools into SpawnOptions', async () => {
     const def = registry.create({
       id: 'scoped',

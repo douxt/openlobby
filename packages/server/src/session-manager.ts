@@ -340,6 +340,15 @@ export class SessionManager {
     this.sessions.set(session.id, session);
     // Record alias so clients using stale IDs can still be resolved
     this.sessionIdAliases.set(oldId, session.id);
+    // Keep the Agent-session index in sync with the real sessionId.
+    // Without this, every IM inbound after the first (when Claude Code
+    // reports its real session id via the init event) looks up a stale
+    // temp id in `this.sessions`, falls through the stale-index branch,
+    // and respawns a brand-new session on every message.
+    if (session.agentId && session.channelIdentity) {
+      const key = this.agentIndexKey(session.agentId, session.channelIdentity);
+      this.agentSessionIndex.set(key, session.id);
+    }
     if (this.db) {
       dbDeleteSession(this.db, oldId);
     }
