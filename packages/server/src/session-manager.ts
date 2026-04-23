@@ -985,12 +985,25 @@ export class SessionManager {
     return undefined;
   }
 
-  listSessions(): SessionSummary[] {
+  /**
+   * List sessions for UI / MCP consumption.
+   *
+   * Agent-mode sessions are HIDDEN by default: they can fan out to one per
+   * (agent, peer) pair — a bound Agent with 100 IM peers would spam the
+   * Sidebar and LobbyManager's `/ls` and `lobby_list_sessions` output with
+   * 100 essentially identical-looking rows that the user doesn't manage
+   * through the normal session UI anyway. Pass `{ includeAgent: true }`
+   * when an explicit consumer (e.g. a future AgentsPanel "view sessions"
+   * drilldown) actually wants them.
+   */
+  listSessions(options?: { includeAgent?: boolean }): SessionSummary[] {
+    const includeAgent = options?.includeAgent ?? false;
     const result: SessionSummary[] = [];
     const seenIds = new Set<string>();
 
     // Active in-memory sessions first
     for (const s of this.sessions.values()) {
+      if (!includeAgent && s.agentId) continue;
       result.push(this.toSummary(s));
       seenIds.add(s.id);
     }
@@ -1000,6 +1013,7 @@ export class SessionManager {
       const rows = getAllSessions(this.db);
       for (const row of rows) {
         if (seenIds.has(row.id)) continue;
+        if (!includeAgent && row.agent_id) continue;
         result.push({
           id: row.id,
           adapterName: row.adapter_name,
@@ -1015,6 +1029,7 @@ export class SessionManager {
           resumeCommand: this.composeResumeCommand(row.adapter_name, row.id, row.cwd),
           jsonlPath: row.jsonl_path ?? undefined,
           pinned: row.pinned === 1,
+          agentId: row.agent_id ?? undefined,
         });
       }
     }

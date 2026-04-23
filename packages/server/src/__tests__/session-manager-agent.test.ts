@@ -241,6 +241,29 @@ describe('SessionManager agent-session flows', () => {
     expect(adapter.lastSpawn?.systemPrompt).toContain('Be terse.');
   });
 
+  it('hides agent sessions from listSessions() by default and includes them on opt-in', async () => {
+    // Create a regular lobby session (no agentId)
+    const plain = await manager.createSession('stub', { cwd: tmp }, 'plain');
+
+    // Create an agent session
+    const def = registry.create({
+      id: 'hidden',
+      displayName: 'Hidden',
+      description: '',
+      adapter: 'stub',
+      contextFiles: [],
+    });
+    const agentSess = await manager.getOrCreateAgentSession(def, identity);
+
+    const defaultList = manager.listSessions();
+    expect(defaultList.map((s) => s.id)).toContain(plain.id);
+    expect(defaultList.map((s) => s.id)).not.toContain(agentSess.id);
+
+    const includedList = manager.listSessions({ includeAgent: true });
+    expect(includedList.map((s) => s.id)).toContain(plain.id);
+    expect(includedList.map((s) => s.id)).toContain(agentSess.id);
+  });
+
   it('resumes the same CLI session when a prior Agent session has died', async () => {
     const def = registry.create({
       id: 'persistent',

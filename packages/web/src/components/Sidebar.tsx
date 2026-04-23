@@ -224,6 +224,11 @@ export default function Sidebar() {
 
   const sortedSessions = Object.values(sessions)
     .filter((s) => s.origin !== 'lobby-manager')
+    // Agent-mode sessions are managed from the AgentsPanel / ChannelManagePanel
+    // — they can fan out to one-per-peer which would spam the Sidebar with
+    // near-identical rows. Hide them here; real-time `session.updated`
+    // broadcasts still land in the store so per-session routing keeps working.
+    .filter((s) => !s.agentId)
     .sort((a, b) => {
       const aPinned = a.pinned ? 1 : 0;
       const bPinned = b.pinned ? 1 : 0;
