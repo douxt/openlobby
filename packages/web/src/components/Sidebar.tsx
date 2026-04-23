@@ -155,9 +155,9 @@ function SessionCard({
         {session.agentId && (
           <span
             className="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border bg-purple-900/40 text-purple-200 border-purple-500/50 font-medium max-w-[96px] truncate"
-            title={agentName ? `Agent: ${agentName}` : 'Agent'}
+            title={agentName ? t('sidebar.agent.badgeTitle', { name: agentName }) : t('sidebar.agent.label')}
           >
-            &#x1F916; {agentName ?? 'Agent'}
+            &#x1F916; {agentName ?? t('sidebar.agent.label')}
           </span>
         )}
         {isAwaiting ? (
@@ -342,7 +342,7 @@ export default function Sidebar() {
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface-elevated text-on-surface-secondary hover:bg-[var(--color-sidebar-hover)] transition-colors"
           >
             <span>&#x1F916;</span>
-            <span className="font-medium">Agents</span>
+            <span className="font-medium">{t('sidebar.agents')}</span>
             {agentsCount > 0 && (
               <span className="ml-auto text-xs text-on-surface-muted">
                 {agentsCount}

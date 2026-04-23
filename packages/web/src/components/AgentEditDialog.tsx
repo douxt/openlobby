@@ -9,6 +9,7 @@ import {
   wsAgentCreate,
   wsAgentUpdate,
 } from '../hooks/useWebSocket';
+import { useI18nContext } from '../contexts/I18nContext';
 
 interface Props {
   /** null = create mode */
@@ -27,18 +28,19 @@ const ADAPTER_OPTIONS: AgentAdapterSelector[] = [
   'gsd',
 ];
 
-const PERMISSION_MODE_OPTIONS: Array<{ value: PermissionModeOption; label: string }> = [
-  { value: '', label: 'Default (inherit)' },
-  { value: 'auto', label: 'auto' },
-  { value: 'supervised', label: 'supervised' },
-  { value: 'readonly', label: 'readonly' },
-];
-
 const RESERVED_IDS = new Set(['lobby-manager']);
 const ID_RE = /^[a-z0-9][a-z0-9-_]*$/;
 
 export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
   const isEdit = agent !== null;
+  const { t } = useI18nContext();
+
+  const PERMISSION_MODE_OPTIONS: Array<{ value: PermissionModeOption; label: string }> = [
+    { value: '', label: t('agentEdit.permissionDefault') },
+    { value: 'auto', label: 'auto' },
+    { value: 'supervised', label: 'supervised' },
+    { value: 'readonly', label: 'readonly' },
+  ];
 
   const [id, setId] = useState(agent?.id ?? '');
   const [displayName, setDisplayName] = useState(agent?.displayName ?? '');
@@ -78,20 +80,20 @@ export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
   const idError = useMemo(() => {
     if (isEdit) return null;
     const trimmed = id.trim();
-    if (!trimmed) return 'ID is required.';
-    if (RESERVED_IDS.has(trimmed)) return `"${trimmed}" is reserved.`;
+    if (!trimmed) return t('agentEdit.errors.idRequired');
+    if (RESERVED_IDS.has(trimmed)) return t('agentEdit.errors.idReserved', { id: trimmed });
     if (!ID_RE.test(trimmed))
-      return 'ID must start with a letter/digit and contain only [a-z0-9-_].';
+      return t('agentEdit.errors.idRegex');
     return null;
-  }, [id, isEdit]);
+  }, [id, isEdit, t]);
 
-  const nameError = displayName.trim() ? null : 'Display name is required.';
+  const nameError = displayName.trim() ? null : t('agentEdit.errors.nameRequired');
 
   const canSubmit = !idError && !nameError && !submitting;
 
   const groupChatWarning =
     groupChatEnabled && requireMention && mentionPatterns.length === 0
-      ? 'With "Require mention" enabled and no patterns, this agent will never respond in group chats.'
+      ? t('agentEdit.groupChatWarning')
       : null;
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -160,20 +162,20 @@ export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
         className="bg-gray-900 rounded-xl p-6 w-full max-w-xl border border-gray-700 max-h-[90vh] overflow-y-auto"
       >
         <h2 className="text-xl font-bold mb-5 text-gray-100">
-          {isEdit ? `Edit Agent: ${agent!.id}` : 'New Agent'}
+          {isEdit ? t('agentEdit.titleEdit', { id: agent!.id }) : t('agentEdit.titleCreate')}
         </h2>
 
         <div className="space-y-4">
           <div>
             <label className="block text-sm text-gray-400 mb-1">
-              ID <span className="text-gray-600">(slug, lowercase)</span>
+              {t('agentEdit.label.id')} <span className="text-gray-600">({t('agentEdit.label.idHint')})</span>
             </label>
             <input
               type="text"
               value={id}
               onChange={(e) => setId(e.target.value)}
               readOnly={isEdit}
-              placeholder="e.g. code-reviewer"
+              placeholder={t('agentEdit.placeholder.id')}
               className={`w-full bg-gray-800 text-gray-100 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500 ${
                 isEdit ? 'opacity-60 cursor-not-allowed' : ''
               }`}
@@ -182,12 +184,12 @@ export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Display Name</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('agentEdit.label.displayName')}</label>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Code Reviewer"
+              placeholder={t('agentEdit.placeholder.displayName')}
               className="w-full bg-gray-800 text-gray-100 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
             />
             {nameError && <p className="text-red-400 text-xs mt-1">{nameError}</p>}
@@ -195,20 +197,20 @@ export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
 
           <div>
             <label className="block text-sm text-gray-400 mb-1">
-              Description <span className="text-gray-600">(optional)</span>
+              {t('agentEdit.label.description')} <span className="text-gray-600">({t('common.optional')})</span>
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
-              placeholder="What this agent does"
+              placeholder={t('agentEdit.placeholder.description')}
               className="w-full bg-gray-800 text-gray-100 rounded-lg px-4 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm text-gray-400 mb-1">Adapter</label>
+              <label className="block text-sm text-gray-400 mb-1">{t('agentEdit.label.adapter')}</label>
               <select
                 value={adapter}
                 onChange={(e) => setAdapter(e.target.value as AgentAdapterSelector)}
@@ -224,20 +226,20 @@ export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
 
             <div>
               <label className="block text-sm text-gray-400 mb-1">
-                Model <span className="text-gray-600">(optional)</span>
+                {t('agentEdit.label.model')} <span className="text-gray-600">({t('common.optional')})</span>
               </label>
               <input
                 type="text"
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                placeholder="e.g. claude-sonnet-4-5"
+                placeholder={t('agentEdit.placeholder.model')}
                 className="w-full bg-gray-800 text-gray-100 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Permission Mode</label>
+            <label className="block text-sm text-gray-400 mb-1">{t('agentEdit.label.permissionMode')}</label>
             <select
               value={permissionMode}
               onChange={(e) => setPermissionMode(e.target.value as PermissionModeOption)}
@@ -253,34 +255,34 @@ export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
 
           <div>
             <label className="block text-sm text-gray-400 mb-1">
-              System Prompt <span className="text-gray-600">(optional, combined with context files)</span>
+              {t('agentEdit.label.systemPrompt')} <span className="text-gray-600">({t('agentEdit.label.systemPromptHint')})</span>
             </label>
             <textarea
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
               rows={4}
-              placeholder="You are a helpful code reviewer..."
+              placeholder={t('agentEdit.placeholder.systemPrompt')}
               className="w-full bg-gray-800 text-gray-100 rounded-lg px-4 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
             />
           </div>
 
           <TagsInput
-            label="Context Files"
-            hint="Relative paths under the agent's workspace dir (e.g. SOUL.md)"
+            label={t('agentEdit.label.contextFiles')}
+            hint={t('agentEdit.hint.contextFiles')}
             values={contextFiles}
             onChange={setContextFiles}
           />
 
           <TagsInput
-            label="Allowed Tools"
-            hint="If set, only these tools can be invoked"
+            label={t('agentEdit.label.allowedTools')}
+            hint={t('agentEdit.hint.allowedTools')}
             values={allowedTools}
             onChange={setAllowedTools}
           />
 
           <TagsInput
-            label="Denied Tools"
-            hint="Deny-list takes precedence over allow-list"
+            label={t('agentEdit.label.deniedTools')}
+            hint={t('agentEdit.hint.deniedTools')}
             values={deniedTools}
             onChange={setDeniedTools}
           />
@@ -293,14 +295,14 @@ export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
                 onChange={(e) => setGroupChatEnabled(e.target.checked)}
                 className="h-4 w-4"
               />
-              <span>Enable group chat</span>
+              <span>{t('agentEdit.label.enableGroupChat')}</span>
             </label>
 
             {groupChatEnabled && (
               <>
                 <TagsInput
-                  label="Mention Patterns"
-                  hint="Case-insensitive substrings that trigger the agent in groups"
+                  label={t('agentEdit.label.mentionPatterns')}
+                  hint={t('agentEdit.hint.mentionPatterns')}
                   values={mentionPatterns}
                   onChange={setMentionPatterns}
                 />
@@ -311,7 +313,7 @@ export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
                     onChange={(e) => setRequireMention(e.target.checked)}
                     className="h-4 w-4"
                   />
-                  <span>Require mention (only respond when a pattern matches)</span>
+                  <span>{t('agentEdit.label.requireMention')}</span>
                 </label>
                 {groupChatWarning && (
                   <p className="text-amber-400 text-xs">{groupChatWarning}</p>
@@ -333,14 +335,14 @@ export default function AgentEditDialog({ agent, onClose, onSaved }: Props) {
             onClick={onClose}
             className="px-4 py-2 text-sm text-gray-400 hover:text-gray-200 rounded-lg hover:bg-gray-800"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="submit"
             disabled={!canSubmit}
             className="px-4 py-2 text-sm rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium"
           >
-            {isEdit ? 'Save' : 'Create'}
+            {isEdit ? t('agentEdit.buttons.save') : t('agentEdit.buttons.create')}
           </button>
         </div>
       </form>
@@ -359,6 +361,7 @@ function TagsInput({
   values: string[];
   onChange: (next: string[]) => void;
 }) {
+  const { t } = useI18nContext();
   const [draft, setDraft] = useState('');
 
   const commitDraft = (raw: string) => {
@@ -406,7 +409,7 @@ function TagsInput({
               type="button"
               onClick={() => removeAt(idx)}
               className="text-gray-400 hover:text-red-300"
-              aria-label={`Remove ${v}`}
+              aria-label={t('agentEdit.tagsRemoveAria', { value: v })}
             >
               &times;
             </button>
@@ -420,7 +423,7 @@ function TagsInput({
           onBlur={() => {
             if (draft.trim()) commitDraft(draft);
           }}
-          placeholder={values.length === 0 ? 'Type and press Enter or comma…' : ''}
+          placeholder={values.length === 0 ? t('agentEdit.placeholder.tagsInput') : ''}
           className="flex-1 min-w-[120px] bg-transparent text-sm text-gray-100 focus:outline-none placeholder-gray-500"
         />
       </div>

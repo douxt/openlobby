@@ -462,9 +462,9 @@ function BindingRow({
             <span>
               {t('channelManage.target')}:{' '}
               {binding.agentId
-                ? 'Agent'
+                ? t('channelManage.targetAgent')
                 : binding.target === 'lobby-manager'
-                  ? 'LM'
+                  ? t('channelManage.targetLm')
                   : binding.activeSessionId?.slice(0, 8) ?? binding.target.slice(0, 8)}
             </span>
             {binding.agentId && (
@@ -479,7 +479,7 @@ function BindingRow({
             onClick={() => setEditing((v) => !v)}
             className="text-on-surface-secondary hover:text-on-surface text-xs"
           >
-            {editing ? t('common.cancel') : 'Edit'}
+            {editing ? t('common.cancel') : t('channelManage.edit')}
           </button>
           <button
             onClick={() => wsUnbind(binding.identityKey)}
@@ -493,27 +493,27 @@ function BindingRow({
       {editing && (
         <div className="border-t border-outline pt-2 space-y-2">
           <div>
-            <label className="block text-xs text-on-surface-secondary mb-1">Target</label>
+            <label className="block text-xs text-on-surface-secondary mb-1">{t('channelManage.targetLabel')}</label>
             <select
               value={kind}
               onChange={(e) => setKind(e.target.value as BindingTargetKind)}
               className="w-full bg-surface border border-outline rounded px-2 py-1 text-xs text-on-surface"
             >
-              <option value="lobby-manager">Lobby Manager</option>
-              <option value="session">Specific session</option>
-              <option value="agent">Agent</option>
+              <option value="lobby-manager">{t('channelManage.bindTo.lobbyManager')}</option>
+              <option value="session">{t('channelManage.bindTo.session')}</option>
+              <option value="agent">{t('channelManage.bindTo.agent')}</option>
             </select>
           </div>
 
           {kind === 'agent' && (
             <div>
-              <label className="block text-xs text-on-surface-secondary mb-1">Agent</label>
+              <label className="block text-xs text-on-surface-secondary mb-1">{t('channelManage.agentSelectLabel')}</label>
               <select
                 value={selectedAgentId}
                 onChange={(e) => setSelectedAgentId(e.target.value)}
                 className="w-full bg-surface border border-outline rounded px-2 py-1 text-xs text-on-surface"
               >
-                <option value="">— select agent —</option>
+                <option value="">{t('channelManage.agentSelectPlaceholder')}</option>
                 {agents.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.displayName} ({a.id})
@@ -525,13 +525,13 @@ function BindingRow({
 
           {kind === 'session' && (
             <div>
-              <label className="block text-xs text-on-surface-secondary mb-1">Session</label>
+              <label className="block text-xs text-on-surface-secondary mb-1">{t('channelManage.sessionSelectLabel')}</label>
               <select
                 value={selectedSessionId}
                 onChange={(e) => setSelectedSessionId(e.target.value)}
                 className="w-full bg-surface border border-outline rounded px-2 py-1 text-xs text-on-surface"
               >
-                <option value="">— select session —</option>
+                <option value="">{t('channelManage.sessionSelectPlaceholder')}</option>
                 {sessionList.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.displayName} ({s.id.slice(0, 8)})
@@ -551,7 +551,7 @@ function BindingRow({
                   : 'bg-surface-elevated text-on-surface-muted cursor-not-allowed'
               }`}
             >
-              Save
+              {t('channelManage.save')}
             </button>
           </div>
         </div>

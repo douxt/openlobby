@@ -145,13 +145,13 @@ export default function RoomHeader() {
             className="text-[11px] px-2 py-0.5 rounded-full border bg-purple-900/40 text-purple-200 border-purple-500/50 font-medium flex items-center gap-1"
             title={agent ? agent.description : undefined}
           >
-            &#x1F916; Agent: {agent?.displayName ?? session.agentId}
+            &#x1F916; {t('roomHeader.agent.label', { name: agent?.displayName ?? session.agentId ?? '' })}
             <button
               onClick={handleViewAgent}
               className="ml-1 underline decoration-dotted text-purple-100 hover:text-white"
-              title="Open AgentsPanel"
+              title={t('roomHeader.agent.openAgentsPanel')}
             >
-              View Agent
+              {t('roomHeader.agent.viewAgent')}
             </button>
           </span>
         )}
@@ -308,19 +308,23 @@ export default function RoomHeader() {
                 <button
                   onClick={handleUnbindPeer}
                   className="text-xs text-danger hover:text-danger-hover"
-                  title={`Unbind ${agentBinding.peerDisplayName ?? agentBinding.peerId} from this Agent`}
+                  title={t('roomHeader.agent.unbindPeerTitle', {
+                    peer: agentBinding.peerDisplayName ?? agentBinding.peerId,
+                  })}
                 >
-                  Unbind Peer ({agentBinding.peerDisplayName ?? agentBinding.peerId})
+                  {t('roomHeader.agent.unbindPeer', {
+                    peer: agentBinding.peerDisplayName ?? agentBinding.peerId,
+                  })}
                 </button>
                 <p className="text-[10px] text-on-surface-muted">
-                  Agent sessions are managed from the Agents panel. Deletion happens there.
+                  {t('roomHeader.agent.managedFromPanel')}
                 </p>
               </div>
             )}
             {!isLM && isAgentSession && !agentBinding && (
               <div className="border-t border-outline pt-2">
                 <p className="text-[10px] text-on-surface-muted">
-                  Agent sessions are managed from the Agents panel.
+                  {t('roomHeader.agent.managedFromPanelShort')}
                 </p>
               </div>
             )}
