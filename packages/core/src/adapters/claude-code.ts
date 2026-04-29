@@ -939,6 +939,25 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     return join(home, '.claude', 'projects');
   }
 
+  /** Build sessionId→name map from ~/.claude/sessions/*.json runtime files */
+  private loadRuntimeSessionNames(): Map<string, string> {
+    const home = process.env.HOME ?? process.env.USERPROFILE ?? '~';
+    const sessionsDir = join(home, '.claude', 'sessions');
+    const nameMap = new Map<string, string>();
+    try {
+      for (const file of readdirSync(sessionsDir)) {
+        if (!file.endsWith('.json')) continue;
+        try {
+          const data = JSON.parse(readFileSync(join(sessionsDir, file), 'utf-8'));
+          if (data.sessionId && typeof data.name === 'string' && data.name) {
+            nameMap.set(data.sessionId, data.name);
+          }
+        } catch { /* skip */ }
+      }
+    } catch { /* dir doesn't exist */ }
+    return nameMap;
+  }
+
   async readSessionHistory(sessionId: string): Promise<LobbyMessage[]> {
     const storagePath = this.getSessionStoragePath();
     // Search all project dirs for the session JSONL
@@ -1076,6 +1095,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     const storagePath = this.getSessionStoragePath();
     if (!existsSync(storagePath)) return [];
 
+    const runtimeNames = this.loadRuntimeSessionNames();
     const results: SessionSummary[] = [];
     let projectDirs: string[];
     try {
@@ -1108,7 +1128,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
 
         try {
           const stat = statSync(filePath);
-          const meta = await this.extractSessionMeta(filePath, sessionId);
+          const meta = await this.extractSessionMeta(filePath);
 
           // Skip sessions with no meaningful content
           if (meta.messageCount === 0 && !meta.lastMessage) continue;
@@ -1117,10 +1137,14 @@ export class ClaudeCodeAdapter implements AgentAdapter {
           const sessionCwd = meta.cwd || decodedCwdHint;
           if (filterCwd && sessionCwd !== filterCwd) continue;
 
+          const displayName = meta.customTitle
+            || runtimeNames.get(sessionId)
+            || meta.lastMessage?.slice(0, 30)
+            || sessionId.slice(0, 8);
           results.push({
             id: sessionId,
             adapterName: this.name,
-            displayName: meta.displayName || sessionId.slice(0, 8),
+            displayName,
             status: 'stopped',
             lastActiveAt: stat.mtimeMs,
             lastMessage: meta.lastMessage,
@@ -1154,13 +1178,14 @@ export class ClaudeCodeAdapter implements AgentAdapter {
   }
 
   /**
-   * Read the first ~30 lines of a JSONL file to extract session metadata.
+   * Read the first ~50 lines of a JSONL file to extract session metadata.
+   * Returns customTitle and lastMessage as separate fields so callers can
+   * decide display-name priority (e.g. customTitle > runtime name > lastMessage).
    */
   private async extractSessionMeta(
     filePath: string,
-    sessionId: string,
   ): Promise<{
-    displayName?: string;
+    customTitle?: string;
     model?: string;
     lastMessage?: string;
     messageCount: number;
@@ -1169,6 +1194,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
     let model: string | undefined;
     let lastMessage: string | undefined;
     let cwd: string | undefined;
+    let customTitle: string | undefined;
     let messageCount = 0;
     let linesRead = 0;
 
@@ -1186,9 +1212,13 @@ export class ClaudeCodeAdapter implements AgentAdapter {
 
           // Extract cwd from the first message that has it
           if (!cwd && typeof obj.cwd === 'string' && obj.cwd) {
-            // Expand ~ to home directory (JSONL may store paths with tilde)
             const raw = obj.cwd as string;
             cwd = raw === '~' ? homedir() : raw.startsWith('~/') ? homedir() + raw.slice(1) : raw;
+          }
+
+          // Extract custom title set by /rename command
+          if (obj.type === 'custom-title' && typeof obj.customTitle === 'string') {
+            customTitle = obj.customTitle;
           }
 
           if (obj.type === 'user' && !obj.isMeta && obj.message?.content) {
@@ -1221,13 +1251,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       rl.close();
     }
 
-    return {
-      displayName: lastMessage ? lastMessage.slice(0, 30) : sessionId.slice(0, 8),
-      model,
-      lastMessage,
-      messageCount,
-      cwd,
-    };
+    return { customTitle, model, lastMessage, messageCount, cwd };
   }
 
   getResumeCommand(sessionId: string): string {
@@ -1256,7 +1280,7 @@ export class ClaudeCodeAdapter implements AgentAdapter {
       if (!existsSync(filePath)) continue;
 
       try {
-        const meta = await this.extractSessionMeta(filePath, sessionId);
+        const meta = await this.extractSessionMeta(filePath);
         if (meta.cwd) return meta.cwd;
       } catch {
         // skip unreadable files
