@@ -210,6 +210,7 @@ pnpm test
 | **LobbyMessage** | Unified message format — all adapter outputs are normalized to this type |
 | **SessionManager** | Manages session lifecycle: create, resume, destroy, message routing |
 | **LobbyManager** | Meta-agent that manages sessions via MCP tools (never executes coding tasks) |
+| **AgentManager** | Meta-agent that designs and improves Agents — interview-driven creation, prompt review, template application. See [docs/agent-manager.md](docs/agent-manager.md). |
 | **ChannelRouter** | Routes messages between IM platforms and sessions |
 
 ## Tech Stack

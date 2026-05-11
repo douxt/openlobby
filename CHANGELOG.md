@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.7.0 (Unreleased)
+
+### Features
+- **Agent Manager (AM)** — new built-in meta-agent dedicated to Agent design and lifecycle. Sibling to Lobby Manager: LM operates, AM designs.
+  - Session scaffold mirroring LM, reading the same `defaultAdapter` server config (server/agent-manager.ts, am-welcome.ts)
+  - System prompt encoding four capability protocols (interview-driven creation, prompt review, diagnose-and-improve, template application), least-privilege tool-policy principles, and an enforced confirmation discipline for every mutating call
+  - Eight new `agent_*` MCP tools (`agent_list`, `agent_get`, `agent_create`, `agent_update`, `agent_delete`, `agent_recent_messages`, `agent_template_list`, `agent_template_apply`) with parallel `/api/agents` and `/api/agent-templates/*` HTTP routes
+  - 5 built-in Agent templates: customer-support, code-reviewer, group-light-assistant, standup-summarizer, alert-triager — TypeScript modules with `{{placeholder}}` fillIns and a render step that returns a draft `AgentDefinition` (no server-side draft store)
+  - Web sidebar 🧙 button promoted to peer-level with the 🏨 LM button; both rows are reserved for primary meta-agent entry points
+  - LM system prompt updated to redirect agent design / review / improvement requests to AM with bilingual trigger phrases
+
+### Documentation
+- `docs/agent-manager.md` — usage guide, template catalogue, boundary table with LM, deferred-feature triggers
+
 ## v0.6.0 (2026-05-11)
 
 ### Features
