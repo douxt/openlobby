@@ -321,65 +321,66 @@ export default function Sidebar() {
           </button>
         </div>
 
-        <div className="px-4 py-2 border-t border-outline">
+        <div className="px-3 py-2 border-t border-outline flex items-center gap-1">
           <button
             onClick={() => setShowChannelPanel(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface-elevated text-on-surface-secondary hover:bg-[var(--color-sidebar-hover)] transition-colors"
+            title={t('sidebar.imChannels')}
+            className="relative p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
           >
             <span>&#x1F4AC;</span>
-            <span className="font-medium">{t('sidebar.imChannels')}</span>
             {channelProviders.length > 0 && (
-              <span className="ml-auto text-xs text-on-surface-muted">
-                {channelProviders.filter((p) => p.healthy).length}/{channelProviders.length}
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-success text-[9px] leading-none flex items-center justify-center font-medium text-white border border-surface-secondary">
+                {channelProviders.filter((p) => p.healthy).length}
               </span>
             )}
           </button>
-        </div>
 
-        <div className="px-4 py-2 border-t border-outline">
           <button
             onClick={() => setShowAgentsPanel(true)}
-            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm bg-surface-elevated text-on-surface-secondary hover:bg-[var(--color-sidebar-hover)] transition-colors"
+            title={t('sidebar.agents')}
+            className="relative p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
           >
             <span>&#x1F916;</span>
-            <span className="font-medium">{t('sidebar.agents')}</span>
             {agentsCount > 0 && (
-              <span className="ml-auto text-xs text-on-surface-muted">
+              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-on text-[9px] leading-none flex items-center justify-center font-medium border border-surface-secondary">
                 {agentsCount}
               </span>
             )}
           </button>
+
+          <span className="flex-1" />
+
+          <button
+            onClick={() => setShowSettingsDialog(true)}
+            title={t('common.settings')}
+            className="p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
+          >
+            <span>⚙️</span>
+          </button>
+          <button
+            onClick={cycleTheme}
+            title={t('sidebar.themeTitle', { theme: themeLabel })}
+            className="p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
+          >
+            <ThemeIcon theme={theme} />
+          </button>
+          <button
+            onClick={toggleLocale}
+            title={t('sidebar.toggleLanguage')}
+            className="p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors text-xs font-bold min-w-[32px]"
+          >
+            {locale === 'zh-CN' ? 'EN' : '中'}
+          </button>
         </div>
 
-        <div className="px-4 py-2 border-t border-outline flex items-center justify-between">
+        <div className="px-4 py-1.5 border-t border-outline flex items-center justify-between">
+          <span
+            className={`inline-block w-2 h-2 rounded-full ${
+              connected ? 'bg-success' : 'bg-danger'
+            }`}
+            title={connected ? 'connected' : 'disconnected'}
+          />
           <div className="flex items-center gap-1">
-            <button
-              onClick={() => setShowSettingsDialog(true)}
-              className="text-xs text-on-surface-secondary hover:text-on-surface hover:bg-surface-elevated px-2 py-1 rounded transition-colors"
-            >
-              ⚙️ {t('common.settings')}
-            </button>
-            <button
-              onClick={cycleTheme}
-              className="text-xs text-on-surface-secondary hover:text-on-surface hover:bg-surface-elevated px-2 py-1 rounded transition-colors"
-              title={t('sidebar.themeTitle', { theme: themeLabel })}
-            >
-              <ThemeIcon theme={theme} />
-            </button>
-            <button
-              onClick={toggleLocale}
-              className="text-xs text-on-surface-secondary hover:text-on-surface hover:bg-surface-elevated px-2 py-1 rounded transition-colors font-medium"
-              title={t('sidebar.toggleLanguage')}
-            >
-              {locale === 'zh-CN' ? 'EN' : '中'}
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-block w-2 h-2 rounded-full ${
-                connected ? 'bg-success' : 'bg-danger'
-              }`}
-            />
             <span className="text-xs text-on-surface-muted">v{APP_VERSION}</span>
             {versionInfo.hasUpdate && versionInfo.latest && (
               <button
