@@ -6,6 +6,7 @@ import type {
   ControlRequestData,
   ChannelProviderData,
   ChannelBindingData,
+  ChannelAccountBindingData,
 } from '../stores/lobby-store';
 import type { AgentDefinition } from '@openlobby/core';
 
@@ -35,11 +36,16 @@ interface ServerMessage {
   available?: boolean;
   // Channel messages
   providers?: ChannelProviderData[];
-  bindings?: ChannelBindingData[];
-  binding?: ChannelBindingData;
+  bindings?: ChannelBindingData[] | ChannelAccountBindingData[];
+  binding?: ChannelBindingData | ChannelAccountBindingData;
   providerId?: string;
   healthy?: boolean;
   identityKey?: string;
+  // Account-level binding messages
+  channelName?: string;
+  accountId?: string;
+  agentId?: string;
+  conflicts?: ChannelBindingData[];
   commands?: Array<{ name: string; description: string; args?: string }>;
   cached?: boolean;
   // Agent messages
@@ -265,14 +271,15 @@ function ensureConnection(url: string) {
         }
         break;
       case 'channel.bindings-list':
-        if (data.bindings) state.setChannelBindings(data.bindings);
+        if (data.bindings) state.setChannelBindings(data.bindings as ChannelBindingData[]);
         break;
       case 'channel.binding-updated':
         if (data.binding) {
+          const peerBinding = data.binding as ChannelBindingData;
           const bindings = state.channelBindings.filter(
-            (b) => b.identityKey !== data.binding!.identityKey,
+            (b) => b.identityKey !== peerBinding.identityKey,
           );
-          bindings.push(data.binding);
+          bindings.push(peerBinding);
           state.setChannelBindings(bindings);
         }
         break;
@@ -281,6 +288,26 @@ function ensureConnection(url: string) {
           state.setChannelBindings(
             state.channelBindings.filter((b) => b.identityKey !== data.identityKey),
           );
+        }
+        break;
+      case 'channel.account-bindings-list':
+        if (data.bindings) {
+          state.setAccountBindings(data.bindings as ChannelAccountBindingData[]);
+        }
+        break;
+      case 'channel.account-binding-updated':
+        // Server broadcast: refresh the full list (mirrors how peer-level
+        // 'channel.binding-updated' is handled — but we re-request to also
+        // pick up unbind broadcasts, which carry no `binding` payload).
+        wsListAccountBindings();
+        break;
+      case 'channel.account-binding-conflict':
+        if (data.channelName && data.accountId && data.conflicts) {
+          state.setAccountBindingConflict({
+            channelName: data.channelName,
+            accountId: data.accountId,
+            conflicts: data.conflicts,
+          });
         }
         break;
 
@@ -503,6 +530,22 @@ export function wsToggleProvider(providerId: string, enabled: boolean): void {
 
 export function wsListBindings(): void {
   wsSend({ type: 'channel.list-bindings' });
+}
+
+export function wsListAccountBindings(): void {
+  wsSend({ type: 'channel.list-account-bindings' });
+}
+
+export function wsBindAgentToAccount(
+  channelName: string,
+  accountId: string,
+  agentId: string,
+): void {
+  wsSend({ type: 'channel.bind-agent-to-account', channelName, accountId, agentId });
+}
+
+export function wsUnbindAgentFromAccount(channelName: string, accountId: string): void {
+  wsSend({ type: 'channel.unbind-agent-from-account', channelName, accountId });
 }
 
 export function wsBind(identityKey: string, target: string): void {

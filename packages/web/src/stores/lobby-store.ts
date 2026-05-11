@@ -48,6 +48,31 @@ export interface ChannelBindingData {
   lastActiveAt: number;
 }
 
+/**
+ * Account-level Agent binding (one (channelName, accountId) → one Agent).
+ * Plain-object mirror of @openlobby/core ChannelAccountBinding.
+ */
+export interface ChannelAccountBindingData {
+  /** "channelName:accountId" — PK */
+  accountKey: string;
+  channelName: string;
+  accountId: string;
+  agentId: string;
+  createdAt: number;
+  lastActiveAt: number;
+}
+
+/**
+ * Most recent account-binding conflict (peer rows that block an account-level
+ * bind). Set when the server replies `channel.account-binding-conflict`,
+ * cleared when the user dismisses.
+ */
+export interface AccountBindingConflictData {
+  channelName: string;
+  accountId: string;
+  conflicts: ChannelBindingData[];
+}
+
 export interface LobbyMessageData {
   id: string;
   sessionId: string;
@@ -102,6 +127,8 @@ interface LobbyState {
   // Channel state
   channelProviders: ChannelProviderData[];
   channelBindings: ChannelBindingData[];
+  accountBindings: ChannelAccountBindingData[];
+  accountBindingConflict: AccountBindingConflictData | null;
 
   // Agent state
   agents: AgentDefinition[];
@@ -153,6 +180,8 @@ interface LobbyState {
   // Channel actions
   setChannelProviders: (providers: ChannelProviderData[]) => void;
   setChannelBindings: (bindings: ChannelBindingData[]) => void;
+  setAccountBindings: (bindings: ChannelAccountBindingData[]) => void;
+  setAccountBindingConflict: (conflict: AccountBindingConflictData | null) => void;
 
   // Adapter permission metadata
   adapterPermissionMeta: Record<string, { displayName: string; modeLabels: Record<string, string> }>;
@@ -213,6 +242,8 @@ export const useLobbyStore = create<LobbyState>((set) => ({
 
   channelProviders: [],
   channelBindings: [],
+  accountBindings: [],
+  accountBindingConflict: null,
 
   agents: [],
   deletedAgents: [],
@@ -497,6 +528,8 @@ export const useLobbyStore = create<LobbyState>((set) => ({
   // Channel actions
   setChannelProviders: (providers) => set({ channelProviders: providers }),
   setChannelBindings: (bindings) => set({ channelBindings: bindings }),
+  setAccountBindings: (bindings) => set({ accountBindings: bindings }),
+  setAccountBindingConflict: (conflict) => set({ accountBindingConflict: conflict }),
 
   adapterPermissionMeta: {},
   adapterDefaults: [],

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import QRCode from 'qrcode';
 import { useLobbyStore } from '../stores/lobby-store';
 import { useI18nContext } from '../contexts/I18nContext';
@@ -8,11 +8,19 @@ import {
   wsRemoveProvider,
   wsToggleProvider,
   wsListBindings,
+  wsListAccountBindings,
   wsUnbind,
   wsChannelBind,
+  wsBindAgentToAccount,
+  wsUnbindAgentFromAccount,
   wsWecomQrStart,
   wsWecomQrCancel,
 } from '../hooks/useWebSocket';
+import type {
+  ChannelBindingData,
+  ChannelAccountBindingData,
+  ChannelProviderData,
+} from '../stores/lobby-store';
 
 interface Props {
   onClose: () => void;
@@ -24,11 +32,13 @@ export default function ChannelManagePanel({ onClose }: Props) {
 
   const providers = useLobbyStore((s) => s.channelProviders);
   const bindings = useLobbyStore((s) => s.channelBindings);
+  const accountBindings = useLobbyStore((s) => s.accountBindings);
   const { t } = useI18nContext();
 
   useEffect(() => {
     wsListProviders();
     wsListBindings();
+    wsListAccountBindings();
   }, []);
 
   return (
@@ -125,17 +135,11 @@ export default function ChannelManagePanel({ onClose }: Props) {
           )}
 
           {tab === 'bindings' && (
-            <>
-              {bindings.length === 0 && (
-                <p className="text-on-surface-muted text-sm text-center py-8">
-                  {t('channelManage.noBindings')}
-                </p>
-              )}
-
-              {bindings.map((b) => (
-                <BindingRow key={b.identityKey} binding={b} />
-              ))}
-            </>
+            <BindingsTab
+              providers={providers}
+              bindings={bindings}
+              accountBindings={accountBindings}
+            />
           )}
         </div>
       </div>
@@ -556,6 +560,286 @@ function BindingRow({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Account-grouped Bindings tab ─────────────────────────────────────────
+
+interface AccountGroupInfo {
+  channelName: string;
+  accountId: string;
+  /** "channelName:accountId" — stable key, matches ChannelAccountBinding.accountKey. */
+  accountKey: string;
+  /** Optional matching provider row (gives healthy/enabled). */
+  provider?: ChannelProviderData;
+  peerBindings: ChannelBindingData[];
+  accountBinding?: ChannelAccountBindingData;
+}
+
+function BindingsTab({
+  providers,
+  bindings,
+  accountBindings,
+}: {
+  providers: ChannelProviderData[];
+  bindings: ChannelBindingData[];
+  accountBindings: ChannelAccountBindingData[];
+}) {
+  const { t } = useI18nContext();
+
+  const groups = useMemo<AccountGroupInfo[]>(() => {
+    const byKey = new Map<string, AccountGroupInfo>();
+    const keyFor = (channelName: string, accountId: string) => `${channelName}:${accountId}`;
+
+    const ensure = (channelName: string, accountId: string): AccountGroupInfo => {
+      const k = keyFor(channelName, accountId);
+      let g = byKey.get(k);
+      if (!g) {
+        g = {
+          channelName,
+          accountId,
+          accountKey: k,
+          peerBindings: [],
+        };
+        byKey.set(k, g);
+      }
+      return g;
+    };
+
+    for (const p of providers) {
+      const g = ensure(p.channelName, p.accountId);
+      g.provider = p;
+    }
+    for (const b of bindings) {
+      const g = ensure(b.channelName, b.accountId);
+      g.peerBindings.push(b);
+    }
+    for (const ab of accountBindings) {
+      const g = ensure(ab.channelName, ab.accountId);
+      g.accountBinding = ab;
+    }
+
+    return Array.from(byKey.values()).sort((a, b) => {
+      if (a.channelName !== b.channelName) return a.channelName.localeCompare(b.channelName);
+      return a.accountId.localeCompare(b.accountId);
+    });
+  }, [providers, bindings, accountBindings]);
+
+  if (groups.length === 0) {
+    return (
+      <p className="text-on-surface-muted text-sm text-center py-8">
+        {t('channelManage.noBindings')}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {groups.map((g) => (
+        <AccountGroup key={g.accountKey} group={g} />
+      ))}
+    </div>
+  );
+}
+
+function AccountGroup({ group }: { group: AccountGroupInfo }) {
+  const { t } = useI18nContext();
+  const agents = useLobbyStore((s) => s.agents);
+  const deletedAgents = useLobbyStore((s) => s.deletedAgents);
+  const conflict = useLobbyStore((s) => s.accountBindingConflict);
+  const setConflict = useLobbyStore((s) => s.setAccountBindingConflict);
+
+  const [picking, setPicking] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [showLockedPeers, setShowLockedPeers] = useState(false);
+
+  const isLocked = !!group.accountBinding;
+  const boundAgent = isLocked
+    ? agents.find((a) => a.id === group.accountBinding!.agentId) ??
+      deletedAgents.find((a) => a.id === group.accountBinding!.agentId)
+    : undefined;
+
+  const groupConflict =
+    conflict &&
+    conflict.channelName === group.channelName &&
+    conflict.accountId === group.accountId
+      ? conflict
+      : null;
+
+  const handleBind = () => {
+    if (!selectedAgentId) return;
+    wsBindAgentToAccount(group.channelName, group.accountId, selectedAgentId);
+    setPicking(false);
+    setSelectedAgentId('');
+  };
+
+  const handleUnbind = () => {
+    if (typeof window !== 'undefined' && !window.confirm(t('channelManage.confirmUnbindAgent'))) {
+      return;
+    }
+    wsUnbindAgentFromAccount(group.channelName, group.accountId);
+  };
+
+  return (
+    <div className="bg-surface-elevated rounded-lg p-3 space-y-3 border border-outline/40">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="min-w-0">
+          <span className="text-on-surface text-sm font-medium">{group.channelName}</span>
+          <span className="text-on-surface-muted text-xs ml-2">· {group.accountId}</span>
+        </div>
+        {group.provider && (
+          <span
+            className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+              group.provider.healthy
+                ? 'bg-success-surface text-success'
+                : 'bg-surface text-on-surface-muted border border-outline'
+            }`}
+            title={group.provider.enabled ? 'enabled' : 'disabled'}
+          >
+            {group.provider.healthy ? '●' : '○'}
+          </span>
+        )}
+      </div>
+
+      {groupConflict && (
+        <div className="bg-danger-surface/40 border border-danger/50 rounded-md p-2 space-y-2 text-xs">
+          <div className="font-medium text-danger">
+            &#x26A0; {t('channelManage.conflict.title')}
+          </div>
+          <div className="text-on-surface-secondary">
+            {t('channelManage.conflict.body', { count: groupConflict.conflicts.length })}
+          </div>
+          <ul className="space-y-1">
+            {groupConflict.conflicts.map((c) => (
+              <li key={c.identityKey} className="flex items-center justify-between gap-2">
+                <span className="truncate text-on-surface">
+                  {c.peerDisplayName ?? c.peerId}
+                  <span className="text-on-surface-muted ml-1">({c.peerId.slice(0, 16)})</span>
+                </span>
+                <button
+                  onClick={() => wsUnbind(c.identityKey)}
+                  className="text-danger hover:text-danger-hover shrink-0"
+                >
+                  {t('channelManage.unbind')}
+                </button>
+              </li>
+            ))}
+          </ul>
+          <div className="flex justify-end">
+            <button
+              onClick={() => setConflict(null)}
+              className="text-on-surface-secondary hover:text-on-surface"
+            >
+              {t('channelManage.conflict.dismiss')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Account-bound Agent section */}
+      <div className="space-y-1">
+        <div className="text-[11px] uppercase tracking-wide text-on-surface-muted">
+          {t('channelManage.section.accountBindings')}
+        </div>
+        {isLocked ? (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm text-on-surface inline-flex items-center gap-2">
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full border bg-purple-900/40 text-purple-200 border-purple-500/50 font-medium">
+                &#x1F916; {boundAgent?.displayName ?? group.accountBinding!.agentId}
+              </span>
+            </span>
+            <button
+              onClick={handleUnbind}
+              className="text-on-surface-secondary hover:text-danger text-xs"
+            >
+              {t('channelManage.unbindAgent')}
+            </button>
+          </div>
+        ) : picking ? (
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedAgentId}
+              onChange={(e) => setSelectedAgentId(e.target.value)}
+              className="flex-1 bg-surface border border-outline rounded px-2 py-1 text-xs text-on-surface"
+            >
+              <option value="">{t('channelManage.agentSelectPlaceholder')}</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.displayName} ({a.id})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleBind}
+              disabled={!selectedAgentId}
+              className={`px-2 py-1 rounded text-xs ${
+                selectedAgentId
+                  ? 'bg-primary text-primary-on hover:bg-primary-hover'
+                  : 'bg-surface text-on-surface-muted cursor-not-allowed'
+              }`}
+            >
+              {t('channelManage.save')}
+            </button>
+            <button
+              onClick={() => {
+                setPicking(false);
+                setSelectedAgentId('');
+              }}
+              className="text-xs text-on-surface-secondary hover:text-on-surface"
+            >
+              {t('common.cancel')}
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setPicking(true)}
+            className="px-2 py-1 rounded text-xs bg-surface border border-outline text-on-surface-secondary hover:text-on-surface hover:border-on-surface-muted"
+          >
+            + {t('channelManage.bindAgentToAccount')}
+          </button>
+        )}
+      </div>
+
+      {/* Peer bindings section */}
+      <div className="space-y-1 border-t border-outline/40 pt-2">
+        <div className="text-[11px] uppercase tracking-wide text-on-surface-muted">
+          {t('channelManage.section.peerBindings')}
+        </div>
+        {isLocked ? (
+          <div className="text-xs text-on-surface-muted italic">
+            {t('channelManage.accountLockedByAgent')}
+            {group.peerBindings.length > 0 && (
+              <>
+                {' '}
+                <button
+                  onClick={() => setShowLockedPeers((v) => !v)}
+                  className="underline hover:text-on-surface ml-1"
+                >
+                  {t('channelManage.viewLockedPeerRows', { count: group.peerBindings.length })}
+                </button>
+              </>
+            )}
+            {showLockedPeers && (
+              <div className="mt-2 space-y-2 opacity-60 pointer-events-none">
+                {group.peerBindings.map((b) => (
+                  <BindingRow key={b.identityKey} binding={b} />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : group.peerBindings.length === 0 ? (
+          <div className="text-xs text-on-surface-muted">
+            {t('channelManage.noBindings')}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {group.peerBindings.map((b) => (
+              <BindingRow key={b.identityKey} binding={b} />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

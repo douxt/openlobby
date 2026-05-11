@@ -222,6 +222,17 @@ export interface Messages {
   'channelManage.agentSelectPlaceholder': string;
   'channelManage.sessionSelectLabel': string;
   'channelManage.sessionSelectPlaceholder': string;
+  'channelManage.section.providers': string;
+  'channelManage.section.accountBindings': string;
+  'channelManage.section.peerBindings': string;
+  'channelManage.bindAgentToAccount': string;
+  'channelManage.unbindAgent': string;
+  'channelManage.accountLockedByAgent': string;
+  'channelManage.viewLockedPeerRows': string;
+  'channelManage.confirmUnbindAgent': string;
+  'channelManage.conflict.title': string;
+  'channelManage.conflict.body': string;
+  'channelManage.conflict.dismiss': string;
 
   'sidebar.agents': string;
   'sidebar.agent.badgeTitle': string;
