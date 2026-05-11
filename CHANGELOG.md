@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.6.0 (2026-05-11)
+
+### Features
+- **Agent Mode (core/server/web)** — end-to-end Agent definitions: persistent `agent_definitions` table with `agent_id` / `peer_kind` columns (0070049), `AgentDefinition` / `peerKind` / `binding.agentId` types (d917e7b), `AgentRegistry` CRUD service with systemPrompt resolution (1d59d1d), shared `enforceToolPolicy` helper wired into all adapters (f817092), `SessionManager.getOrCreateAgentSession` with agent-session index and cascade stop (89ec80c), `ChannelRouter` Agent routing branch with mention rule and lock (6338616), WebSocket dispatch for `agent.*` messages and `binding.agentId` (031a581).
+- **Agents management UI (web)** — Agents panel with CRUD and soft-delete (2ae7122), Agent session badges, binding dropdown option, sidebar entry (82c810a), hide agent sessions from default session lists to avoid spam (b824019), Agent UI localised to en + zh-CN (6d1024b).
+- **Channels** — populate `ChannelIdentity.peerKind` in Telegram and WeCom (ff17238).
+
+### Bug Fixes
+- Sync `agentSessionIndex` on session-id migration (4d54fc9)
+- Resume Agent sessions on natural death instead of re-spawning (fa4d9b3)
+
+### Refactor
+- Collapse sidebar footer entries (IM / Agents / Settings) into a compact icon toolbar with badge counts — reclaims vertical space and gives room for future feature entries without pushing the session list off-screen (86b4f06)
+
+### Documentation
+- Add Agent Mode design spec and implementation plan (7dac13f)
+
 ## v0.5.8 (2026-04-21)
 
 ### Bug Fixes
