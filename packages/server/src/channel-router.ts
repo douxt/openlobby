@@ -138,6 +138,16 @@ export class ChannelRouterImpl implements ChannelRouter {
    */
   private lastSenderBySession = new Map<string, string>();
 
+  /**
+   * In-memory map: sessionId → full ChannelIdentity of whoever last sent a
+   * message. Required to route replies for account-level Agent bindings,
+   * where no peer-level row exists in channel_bindings — meaning the
+   * sessionId-keyed DB lookups in resolveResponseBinding cannot recover
+   * the channel / account / peerKind needed to construct an outbound
+   * reply. Populated alongside lastSenderBySession on every inbound.
+   */
+  private identityBySession = new Map<string, ChannelIdentity>();
+
   /** Per-identity stream buffer for think-tag typing */
   private streamStates = new Map<string, StreamState>();
 
@@ -523,6 +533,7 @@ export class ChannelRouterImpl implements ChannelRouter {
 
     console.log(`[ChannelRouter] Routing to session ${sessionId}`);
     this.lastSenderBySession.set(sessionId, identityKey);
+    this.identityBySession.set(sessionId, msg.identity);
     this.messageOriginBySession.set(sessionId, 'im');
 
     // Initialize think state immediately when user sends a message
@@ -689,6 +700,7 @@ export class ChannelRouterImpl implements ChannelRouter {
     const session = await this.sessionManager.getOrCreateAgentSession(agent, msg.identity);
 
     this.lastSenderBySession.set(session.id, identityKey);
+    this.identityBySession.set(session.id, msg.identity);
     this.messageOriginBySession.set(session.id, 'im');
 
     // Keep account-level binding's lastActiveAt fresh for UI ordering.
@@ -1540,6 +1552,30 @@ export class ChannelRouterImpl implements ChannelRouter {
       if (b.target === sessionId) return b;
     }
 
+    // 4. Account-level Agent binding has no peer row in channel_bindings —
+    //    synthesize a virtual ChannelBindingRow from the in-memory identity
+    //    cache so the outbound reply path can still find the channel +
+    //    account + peer to write back to. Without this, replies from
+    //    account-bound Agent sessions hit "No binding for session" and never
+    //    reach the IM user.
+    const identity = this.identityBySession.get(sessionId);
+    if (identity) {
+      const now = Date.now();
+      return {
+        identity_key: toIdentityKey(identity),
+        channel_name: identity.channelName,
+        account_id: identity.accountId,
+        peer_id: identity.peerId,
+        peer_display_name: identity.peerDisplayName ?? null,
+        peer_kind: identity.peerKind ?? 'direct',
+        target: sessionId,
+        active_session_id: sessionId,
+        agent_id: null,
+        created_at: now,
+        last_active_at: now,
+      };
+    }
+
     return null;
   }
 
@@ -1552,6 +1588,11 @@ export class ChannelRouterImpl implements ChannelRouter {
       if (lastSender) {
         this.lastSenderBySession.delete(previousId);
         this.lastSenderBySession.set(session.id, lastSender);
+      }
+      const identity = this.identityBySession.get(previousId);
+      if (identity) {
+        this.identityBySession.delete(previousId);
+        this.identityBySession.set(session.id, identity);
       }
 
       // Sync stream states
