@@ -969,6 +969,80 @@ export class SessionManager {
     return this.messageCache.get(sessionId) ?? [];
   }
 
+  /**
+   * Read recent messages across all sessions owned by an Agent, optionally
+   * scoped to a single peer.
+   *
+   * Used by AM's `agent_recent_messages` diagnostic tool. Falls back to the
+   * adapter's on-disk JSONL history for sessions whose in-memory cache is
+   * empty (e.g. process exited or never spun up after a server restart).
+   * Results are sorted newest-first and trimmed to `limit`.
+   */
+  async getRecentAgentMessages(
+    agentId: string,
+    opts: { limit?: number; peerId?: string } = {},
+  ): Promise<Array<{
+    sessionId: string;
+    peerId: string;
+    peerKind?: ChannelIdentity['peerKind'];
+    timestamp: number;
+    role: string;
+    content: string | Record<string, unknown>;
+  }>> {
+    const limit = Math.min(Math.max(opts.limit ?? 20, 1), 100);
+    const rows = this.db ? getSessionsByAgent(this.db, agentId) : [];
+
+    type Out = {
+      sessionId: string;
+      peerId: string;
+      peerKind?: ChannelIdentity['peerKind'];
+      timestamp: number;
+      role: string;
+      content: string | Record<string, unknown>;
+    };
+    const collected: Out[] = [];
+
+    for (const row of rows) {
+      const live = this.sessions.get(row.id);
+      // Resolve peer identity from the live session (preferred) or row only.
+      const peerId = live?.channelIdentity?.peerId;
+      const peerKind = live?.channelIdentity?.peerKind;
+      if (opts.peerId && peerId && peerId !== opts.peerId) continue;
+      // For SQLite-only sessions we don't know the peer; skip them when a
+      // peer filter is set rather than guessing.
+      if (opts.peerId && !peerId) continue;
+
+      let msgs: LobbyMessage[] = this.messageCache.get(row.id) ?? [];
+      if (msgs.length === 0) {
+        // Best-effort fallback to adapter JSONL history.
+        const adapter = this.adapters.get(row.adapter_name);
+        if (adapter) {
+          try {
+            msgs = await adapter.readSessionHistory(row.id);
+          } catch {
+            msgs = [];
+          }
+        }
+      }
+
+      for (const m of msgs) {
+        // Only surface conversational message types to AM.
+        if (m.type !== 'user' && m.type !== 'assistant' && m.type !== 'system') continue;
+        collected.push({
+          sessionId: row.id,
+          peerId: peerId ?? '',
+          peerKind,
+          timestamp: m.timestamp,
+          role: m.type,
+          content: m.content,
+        });
+      }
+    }
+
+    collected.sort((a, b) => b.timestamp - a.timestamp);
+    return collected.slice(0, limit);
+  }
+
   getAdapterForSession(sessionId: string): AgentAdapter | undefined {
     const session = this.sessions.get(sessionId);
     if (session) {

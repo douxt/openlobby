@@ -308,6 +308,166 @@ async function main() {
     },
   );
 
+  // ─── Agent CRUD Tools ────────────────────────────────────────────
+
+  const AGENT_ADAPTER_ENUM = z.enum(['claude-code', 'codex-cli', 'opencode', 'gsd', 'any']);
+  const AGENT_PERMISSION_MODE = z.enum(['auto', 'supervised', 'readonly']);
+  const AGENT_GROUP_CHAT = z
+    .object({
+      mentionPatterns: z.array(z.string()),
+      requireMention: z.boolean(),
+    })
+    .optional();
+
+  // --- Tool: agent_list ---
+  server.tool(
+    'agent_list',
+    'List all Agent definitions managed by OpenLobby (excludes soft-deleted by default)',
+    {
+      includeDeleted: z.boolean().default(false).describe('Include soft-deleted agents'),
+    },
+    async ({ includeDeleted }) => {
+      const qs = includeDeleted ? '?includeDeleted=true' : '';
+      const result = await apiCall('GET', `/api/agents${qs}`);
+      return textResult(result);
+    },
+  );
+
+  // --- Tool: agent_get ---
+  server.tool(
+    'agent_get',
+    'Fetch a single Agent definition by id (returns null if not found)',
+    {
+      id: z.string().describe('Agent id'),
+    },
+    async ({ id }) => {
+      const result = await apiCall('GET', `/api/agents/${encodeURIComponent(id)}`);
+      return textResult(result);
+    },
+  );
+
+  // --- Tool: agent_create ---
+  server.tool(
+    'agent_create',
+    'Create a new Agent definition. id is auto-generated from displayName if omitted. Requires displayName, adapter, description, and either systemPrompt or contextFiles.',
+    {
+      id: z.string().regex(/^[a-z0-9][a-z0-9-_]*$/).optional().describe('Agent id (auto-generated from displayName if omitted)'),
+      displayName: z.string().min(1).describe('Human-readable agent name'),
+      description: z.string().default('').describe('Short description of the agent'),
+      adapter: AGENT_ADAPTER_ENUM.describe('Adapter selector'),
+      systemPrompt: z.string().optional().describe('Inline system prompt (concatenated with contextFiles)'),
+      contextFiles: z.array(z.string()).optional().describe('Workspace-relative file paths to concatenate into the system prompt'),
+      model: z.string().optional(),
+      permissionMode: AGENT_PERMISSION_MODE.optional(),
+      allowedTools: z.array(z.string()).optional(),
+      deniedTools: z.array(z.string()).optional(),
+      groupChat: AGENT_GROUP_CHAT,
+    },
+    async (input) => {
+      const result = await apiCall('POST', '/api/agents', input);
+      return textResult(result);
+    },
+  );
+
+  // --- Tool: agent_update ---
+  server.tool(
+    'agent_update',
+    'Patch an existing Agent definition. id, createdAt, updatedAt, and deletedAt are stripped server-side.',
+    {
+      id: z.string().describe('Agent id to update'),
+      patch: z
+        .object({
+          displayName: z.string().min(1).optional(),
+          description: z.string().optional(),
+          adapter: AGENT_ADAPTER_ENUM.optional(),
+          systemPrompt: z.string().optional(),
+          contextFiles: z.array(z.string()).optional(),
+          model: z.string().optional(),
+          permissionMode: AGENT_PERMISSION_MODE.optional(),
+          allowedTools: z.array(z.string()).optional(),
+          deniedTools: z.array(z.string()).optional(),
+          groupChat: AGENT_GROUP_CHAT,
+        })
+        .describe('Partial AgentDefinition; only supplied fields are applied'),
+    },
+    async ({ id, patch }) => {
+      const result = await apiCall(
+        'PATCH',
+        `/api/agents/${encodeURIComponent(id)}`,
+        patch,
+      );
+      return textResult(result);
+    },
+  );
+
+  // --- Tool: agent_delete ---
+  server.tool(
+    'agent_delete',
+    'Delete an Agent. Soft-delete by default; pass hard=true to permanently remove (requires the agent to already be soft-deleted).',
+    {
+      id: z.string().describe('Agent id'),
+      hard: z.boolean().default(false).describe('When true, hard-delete (irreversible). User confirmation is enforced by AM at the conversation layer, not by this tool.'),
+    },
+    async ({ id, hard }) => {
+      const qs = hard ? '?hard=true' : '';
+      const result = await apiCall(
+        'DELETE',
+        `/api/agents/${encodeURIComponent(id)}${qs}`,
+      );
+      return textResult(result);
+    },
+  );
+
+  // ─── Agent Diagnostics & Templates ───────────────────────────────
+
+  // --- Tool: agent_recent_messages ---
+  server.tool(
+    'agent_recent_messages',
+    'Read recent conversation messages from sessions owned by a given Agent. Used for diagnosing prompt issues.',
+    {
+      agentId: z.string().describe('Agent id whose sessions to inspect'),
+      limit: z.number().int().min(1).max(100).default(20).describe('Max messages to return (1-100)'),
+      peerId: z.string().optional().describe('Scope to a single peer'),
+    },
+    async ({ agentId, limit, peerId }) => {
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (peerId) params.set('peerId', peerId);
+      const result = await apiCall(
+        'GET',
+        `/api/agents/${encodeURIComponent(agentId)}/recent-messages?${params.toString()}`,
+      );
+      return textResult(result);
+    },
+  );
+
+  // --- Tool: agent_template_list ---
+  server.tool(
+    'agent_template_list',
+    'List available Agent templates with their fillIn metadata so AM can interview the user.',
+    {},
+    async () => {
+      const result = await apiCall('GET', '/api/agent-templates');
+      return textResult(result);
+    },
+  );
+
+  // --- Tool: agent_template_apply ---
+  server.tool(
+    'agent_template_apply',
+    'Render a template into a draft AgentDefinition. Does NOT persist anything — AM presents the draft for user confirmation, then calls agent_create.',
+    {
+      templateId: z.string().describe('Template id (from agent_template_list)'),
+      fillIns: z.record(z.string(), z.string()).default({}).describe('User-supplied placeholder values'),
+    },
+    async ({ templateId, fillIns }) => {
+      const result = await apiCall('POST', '/api/agent-templates/apply', {
+        templateId,
+        fillIns,
+      });
+      return textResult(result);
+    },
+  );
+
   // --- Tool: lobby_check_update ---
   server.tool(
     'lobby_check_update',

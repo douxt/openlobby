@@ -105,14 +105,20 @@ export async function createServer(options: ServerOptions = {}) {
   sessionManager.setAgentRegistry(agentRegistry);
 
   // Start MCP internal API on separate port (channelRouter injected below)
-  const mcpApi = await startMcpApi(sessionManager, mcpApiPort, versionChecker, () => {
-    if (updateInProgress) return { status: 'already-updating' };
-    const installMode = versionChecker.getInstallMode();
-    if (installMode === 'npx') return { status: 'npx-hint', message: 'Running via npx. Latest version used automatically next time.' };
-    updateInProgress = true;
-    safeSend({ type: 'update-and-restart' });
-    return { status: 'updating' };
-  });
+  const mcpApi = await startMcpApi(
+    sessionManager,
+    mcpApiPort,
+    versionChecker,
+    () => {
+      if (updateInProgress) return { status: 'already-updating' };
+      const installMode = versionChecker.getInstallMode();
+      if (installMode === 'npx') return { status: 'npx-hint', message: 'Running via npx. Latest version used automatically next time.' };
+      updateInProgress = true;
+      safeSend({ type: 'update-and-restart' });
+      return { status: 'updating' };
+    },
+    agentRegistry,
+  );
 
   // Initialize Lobby Manager
   const lobbyManager = new LobbyManager(sessionManager, allAdapters, mcpApiPort, db);

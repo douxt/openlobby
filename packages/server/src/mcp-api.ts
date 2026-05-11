@@ -1,9 +1,17 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyInstance } from 'fastify';
 import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { z } from 'zod';
+import type { AgentDefinition, AgentAdapterSelector } from '@openlobby/core';
 import type { SessionManager } from './session-manager.js';
 import type { ChannelRouterImpl } from './channel-router.js';
 import type { VersionChecker } from './version-checker.js';
+import type { AgentRegistry } from './agent-registry.js';
+import {
+  getAgentTemplate,
+  listAgentTemplateSummaries,
+  renderTemplate,
+} from './agent-templates/index.js';
 
 /** Expand leading `~` or `~/` to the user's home directory */
 function expandTilde(p: string): string {
@@ -17,21 +25,134 @@ export interface McpApiHandle {
   close(): Promise<void>;
 }
 
+/** Slugify a displayName to a registry-valid id (`/^[a-z0-9][a-z0-9-_]*$/`). */
+function slugifyAgentId(displayName: string): string {
+  const base = displayName
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (!base || !/^[a-z0-9]/.test(base)) {
+    return `agent-${Date.now().toString(36)}`;
+  }
+  return base;
+}
+
+const ADAPTER_SELECTOR = z.enum(['claude-code', 'codex-cli', 'opencode', 'gsd', 'any']);
+const PERMISSION_MODE = z.enum(['auto', 'supervised', 'readonly']);
+
+const AgentCreateBody = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9-_]*$/).optional(),
+  displayName: z.string().min(1),
+  description: z.string().default(''),
+  adapter: ADAPTER_SELECTOR,
+  systemPrompt: z.string().optional(),
+  contextFiles: z.array(z.string()).optional(),
+  model: z.string().optional(),
+  permissionMode: PERMISSION_MODE.optional(),
+  allowedTools: z.array(z.string()).optional(),
+  deniedTools: z.array(z.string()).optional(),
+  groupChat: z
+    .object({
+      mentionPatterns: z.array(z.string()),
+      requireMention: z.boolean(),
+    })
+    .optional(),
+});
+
+const AgentPatchSchema = z.object({
+  displayName: z.string().min(1).optional(),
+  description: z.string().optional(),
+  adapter: ADAPTER_SELECTOR.optional(),
+  systemPrompt: z.string().optional(),
+  contextFiles: z.array(z.string()).optional(),
+  model: z.string().optional(),
+  permissionMode: PERMISSION_MODE.optional(),
+  allowedTools: z.array(z.string()).optional(),
+  deniedTools: z.array(z.string()).optional(),
+  groupChat: z
+    .object({
+      mentionPatterns: z.array(z.string()),
+      requireMention: z.boolean(),
+    })
+    .optional(),
+});
+
+const AgentTemplateApplyBody = z.object({
+  templateId: z.string().min(1),
+  fillIns: z.record(z.string(), z.string()).default({}),
+});
+
+const AgentRecentMessagesQuery = z.object({
+  agentId: z.string().min(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  peerId: z.string().optional(),
+});
+
+/**
+ * Build the MCP internal API fastify instance, including agent-management
+ * routes. Exposed separately so unit tests can drive it via `app.inject()`
+ * without binding a real port.
+ */
+export function buildMcpApi(deps: {
+  sessionManager: SessionManager;
+  versionChecker?: VersionChecker | null;
+  triggerUpdate?: () => { status: string; message?: string };
+  agentRegistry?: AgentRegistry | null;
+}): {
+  app: FastifyInstance;
+  setChannelRouter: (router: ChannelRouterImpl) => void;
+} {
+  const { sessionManager, versionChecker, triggerUpdate, agentRegistry } = deps;
+  const app = Fastify({ logger: false });
+  let channelRouter: ChannelRouterImpl | null = null;
+
+  registerSessionRoutes(app, sessionManager, () => channelRouter, versionChecker, triggerUpdate);
+  registerAgentRoutes(app, agentRegistry ?? null, sessionManager);
+
+  return {
+    app,
+    setChannelRouter(router: ChannelRouterImpl) {
+      channelRouter = router;
+    },
+  };
+}
+
 /**
  * Start a lightweight internal HTTP API on a separate port for the MCP Server process.
- * This API exposes SessionManager operations as REST endpoints.
+ * This API exposes SessionManager + AgentRegistry operations as REST endpoints.
  */
 export async function startMcpApi(
   sessionManager: SessionManager,
   port: number,
   versionChecker?: VersionChecker | null,
   triggerUpdate?: () => { status: string; message?: string },
+  agentRegistry?: AgentRegistry | null,
 ): Promise<McpApiHandle> {
-  const app = Fastify({ logger: false });
+  const { app, setChannelRouter } = buildMcpApi({
+    sessionManager,
+    versionChecker,
+    triggerUpdate,
+    agentRegistry,
+  });
 
-  // Channel router is injected after construction (initialization order)
-  let channelRouter: ChannelRouterImpl | null = null;
+  await app.listen({ port, host: '127.0.0.1' });
+  console.log(`MCP internal API running on http://127.0.0.1:${port}`);
 
+  return {
+    setChannelRouter,
+    async close() {
+      await app.close();
+    },
+  };
+}
+
+function registerSessionRoutes(
+  app: FastifyInstance,
+  sessionManager: SessionManager,
+  getChannelRouter: () => ChannelRouterImpl | null,
+  versionChecker?: VersionChecker | null,
+  triggerUpdate?: () => { status: string; message?: string },
+): void {
   // List all sessions
   app.get('/api/sessions', async () => {
     return sessionManager.listSessions();
@@ -173,6 +294,7 @@ export async function startMcpApi(
 
   // List all channel providers
   app.get('/api/channels/providers', async (_request, reply) => {
+    const channelRouter = getChannelRouter();
     if (!channelRouter) {
       return reply.status(503).send({ error: 'Channel router not initialized' });
     }
@@ -189,6 +311,7 @@ export async function startMcpApi(
       enabled?: boolean;
     };
   }>('/api/channels/providers', async (request, reply) => {
+    const channelRouter = getChannelRouter();
     if (!channelRouter) {
       return reply.status(503).send({ error: 'Channel router not initialized' });
     }
@@ -206,6 +329,7 @@ export async function startMcpApi(
   app.delete<{ Params: { id: string } }>(
     '/api/channels/providers/:id',
     async (request, reply) => {
+      const channelRouter = getChannelRouter();
       if (!channelRouter) {
         return reply.status(503).send({ error: 'Channel router not initialized' });
       }
@@ -225,6 +349,7 @@ export async function startMcpApi(
     Params: { id: string };
     Body: { enabled: boolean };
   }>('/api/channels/providers/:id', async (request, reply) => {
+    const channelRouter = getChannelRouter();
     if (!channelRouter) {
       return reply.status(503).send({ error: 'Channel router not initialized' });
     }
@@ -245,6 +370,7 @@ export async function startMcpApi(
 
   // List all channel bindings
   app.get('/api/channels/bindings', async (_request, reply) => {
+    const channelRouter = getChannelRouter();
     if (!channelRouter) {
       return reply.status(503).send({ error: 'Channel router not initialized' });
     }
@@ -255,6 +381,7 @@ export async function startMcpApi(
   app.post<{
     Body: { identityKey: string; sessionId: string };
   }>('/api/channels/bindings', async (request, reply) => {
+    const channelRouter = getChannelRouter();
     if (!channelRouter) {
       return reply.status(503).send({ error: 'Channel router not initialized' });
     }
@@ -270,6 +397,7 @@ export async function startMcpApi(
   app.delete<{ Params: { key: string } }>(
     '/api/channels/bindings/:key',
     async (request, reply) => {
+      const channelRouter = getChannelRouter();
       if (!channelRouter) {
         return reply.status(503).send({ error: 'Channel router not initialized' });
       }
@@ -295,16 +423,207 @@ export async function startMcpApi(
     if (!triggerUpdate) return { error: 'Update not available' };
     return triggerUpdate();
   });
+}
 
-  await app.listen({ port, host: '127.0.0.1' });
-  console.log(`MCP internal API running on http://127.0.0.1:${port}`);
-
-  return {
-    setChannelRouter(router: ChannelRouterImpl) {
-      channelRouter = router;
-    },
-    async close() {
-      await app.close();
-    },
+function registerAgentRoutes(
+  app: FastifyInstance,
+  agentRegistry: AgentRegistry | null,
+  sessionManager: SessionManager,
+): void {
+  const requireRegistry = (reply: import('fastify').FastifyReply) => {
+    if (!agentRegistry) {
+      reply.status(503).send({ error: 'Agent registry not available' });
+      return null;
+    }
+    return agentRegistry;
   };
+
+  // GET /api/agents?includeDeleted=true
+  app.get<{ Querystring: { includeDeleted?: string } }>(
+    '/api/agents',
+    async (request, reply) => {
+      const registry = requireRegistry(reply);
+      if (!registry) return;
+      const includeDeleted = request.query.includeDeleted === 'true';
+      return registry.list(includeDeleted);
+    },
+  );
+
+  // GET /api/agents/:id
+  app.get<{ Params: { id: string } }>(
+    '/api/agents/:id',
+    async (request, reply) => {
+      const registry = requireRegistry(reply);
+      if (!registry) return;
+      const def = registry.get(decodeURIComponent(request.params.id));
+      if (!def) return reply.status(404).send({ error: 'Agent not found' });
+      return def;
+    },
+  );
+
+  // POST /api/agents — create
+  app.post('/api/agents', async (request, reply) => {
+    const registry = requireRegistry(reply);
+    if (!registry) return;
+    const parsed = AgentCreateBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Invalid agent payload',
+        issues: parsed.error.issues,
+      });
+    }
+    const body = parsed.data;
+    if (!body.systemPrompt && (!body.contextFiles || body.contextFiles.length === 0)) {
+      return reply
+        .status(400)
+        .send({ error: 'Agent requires either systemPrompt or contextFiles[].' });
+    }
+
+    // Auto-generate id from displayName if caller did not supply one,
+    // honoring the registry's slug rule and avoiding collisions.
+    let id = body.id;
+    if (!id) {
+      const base = slugifyAgentId(body.displayName);
+      id = base;
+      let n = 1;
+      while (registry.get(id)) {
+        n += 1;
+        id = `${base}-${n}`;
+      }
+    }
+
+    try {
+      const created = registry.create({
+        id,
+        displayName: body.displayName,
+        description: body.description,
+        adapter: body.adapter as AgentAdapterSelector,
+        systemPrompt: body.systemPrompt,
+        contextFiles: body.contextFiles ?? [],
+        model: body.model,
+        permissionMode: body.permissionMode,
+        allowedTools: body.allowedTools,
+        deniedTools: body.deniedTools,
+        groupChat: body.groupChat,
+      });
+      return created;
+    } catch (err) {
+      return reply.status(400).send({
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  });
+
+  // PATCH /api/agents/:id — update
+  app.patch<{ Params: { id: string } }>(
+    '/api/agents/:id',
+    async (request, reply) => {
+      const registry = requireRegistry(reply);
+      if (!registry) return;
+      const parsed = AgentPatchSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: 'Invalid patch payload',
+          issues: parsed.error.issues,
+        });
+      }
+      // Strip server-managed fields defensively, even though the schema
+      // already omits them — caller's body type is `unknown`.
+      const patch: Partial<AgentDefinition> = { ...parsed.data };
+      try {
+        const updated = registry.update(decodeURIComponent(request.params.id), patch);
+        return updated;
+      } catch (err) {
+        return reply.status(400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  );
+
+  // DELETE /api/agents/:id?hard=true
+  app.delete<{ Params: { id: string }; Querystring: { hard?: string } }>(
+    '/api/agents/:id',
+    async (request, reply) => {
+      const registry = requireRegistry(reply);
+      if (!registry) return;
+      const id = decodeURIComponent(request.params.id);
+      const hard = request.query.hard === 'true';
+      try {
+        if (hard) registry.hardDelete(id);
+        else registry.softDelete(id);
+        return { deleted: true, id, hard };
+      } catch (err) {
+        return reply.status(400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  );
+
+  // GET /api/agents/:id/recent-messages?limit=20&peerId=...
+  app.get<{
+    Params: { id: string };
+    Querystring: { limit?: string; peerId?: string };
+  }>('/api/agents/:id/recent-messages', async (request, reply) => {
+    const parsed = AgentRecentMessagesQuery.safeParse({
+      agentId: decodeURIComponent(request.params.id),
+      limit: request.query.limit,
+      peerId: request.query.peerId,
+    });
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: 'Invalid query', issues: parsed.error.issues });
+    }
+    const { agentId, limit, peerId } = parsed.data;
+    return sessionManager.getRecentAgentMessages(agentId, { limit, peerId });
+  });
+
+  // GET /api/agent-templates
+  app.get('/api/agent-templates', async () => {
+    const summaries = listAgentTemplateSummaries();
+    // Augment with full fillIn metadata so AM can drive the interview.
+    return summaries.map((s) => {
+      const tmpl = getAgentTemplate(s.id)!;
+      return {
+        ...s,
+        fillIns: tmpl.fillIns.map((f) => ({
+          key: f.key,
+          prompt: f.prompt,
+          required: f.required,
+          default: f.default,
+          helpText: f.helpText,
+        })),
+      };
+    });
+  });
+
+  // POST /api/agent-templates/apply
+  app.post('/api/agent-templates/apply', async (request, reply) => {
+    const parsed = AgentTemplateApplyBody.safeParse(request.body);
+    if (!parsed.success) {
+      return reply
+        .status(400)
+        .send({ error: 'Invalid request', issues: parsed.error.issues });
+    }
+    const { templateId, fillIns } = parsed.data;
+    const template = getAgentTemplate(templateId);
+    if (!template) {
+      return reply
+        .status(404)
+        .send({ error: `Template "${templateId}" not found.` });
+    }
+    const result = renderTemplate(template, fillIns);
+    if (!result.draft) {
+      return { missingRequired: result.missingRequired };
+    }
+    if (result.unresolvedPlaceholders.length > 0) {
+      return {
+        draft: result.draft,
+        unresolvedPlaceholders: result.unresolvedPlaceholders,
+      };
+    }
+    return { draft: result.draft };
+  });
 }

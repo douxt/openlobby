@@ -98,13 +98,21 @@ Respond in the same language as the user's message (auto-detect from input). Mix
 /**
  * MCP tool names that the Agent Manager is allowed to use (auto-approved).
  *
- * TODO: A later task adds dedicated agent_* MCP tools here (agent_list,
- * agent_create, agent_update, agent_template_apply, etc.). For now we
- * leave this empty so AM boots cleanly but cannot mutate any state via
- * MCP — interactions are conversational only.
+ * Scoped tightly to the Agent design surface — AM does NOT get session,
+ * channel, or version tools. That boundary is intentional: AM designs,
+ * LM operates.
  */
 const AM_ALLOWED_TOOLS: string[] = [
-  // TODO: Task 4 adds agent_* MCP tools here
+  // CRUD
+  'mcp__openlobby__agent_list',
+  'mcp__openlobby__agent_get',
+  'mcp__openlobby__agent_create',
+  'mcp__openlobby__agent_update',
+  'mcp__openlobby__agent_delete',
+  // Diagnostics & templates
+  'mcp__openlobby__agent_recent_messages',
+  'mcp__openlobby__agent_template_list',
+  'mcp__openlobby__agent_template_apply',
 ];
 
 
