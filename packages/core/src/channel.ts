@@ -16,6 +16,14 @@ export interface ChannelIdentity {
    * Providers that cannot distinguish default to 'direct'.
    */
   peerKind: ChannelPeerKind;
+  /**
+   * Group/chat id, populated by the provider when peerKind === 'group'.
+   * Used by account-level Agent bindings to fan out sessions per
+   * (chatId, peerId) inside a group — so different users in the same
+   * group, and the same user across different groups, stay in
+   * separate sessions. Undefined for direct chats.
+   */
+  chatId?: string;
 }
 
 /** 序列化 key："channelName:accountId:peerId" */
@@ -23,6 +31,31 @@ export type ChannelIdentityKey = string;
 
 export function toIdentityKey(id: ChannelIdentity): ChannelIdentityKey {
   return `${id.channelName}:${id.accountId}:${id.peerId}`;
+}
+
+/**
+ * Serialize key for an account-level Agent binding: "channelName:accountId".
+ * Distinct from ChannelIdentityKey because account bindings span all peers
+ * of a given (channel, account) tuple.
+ */
+export type ChannelAccountKey = string;
+
+export function toAccountKey(channelName: string, accountId: string): ChannelAccountKey {
+  return `${channelName}:${accountId}`;
+}
+
+/**
+ * Fan-out key used by SessionManager to materialize a per-peer Agent
+ * session under an account-level binding. Includes chatId for groups so
+ * each user-in-group is its own session, and direct/group are namespaced
+ * so a 1:1 with userid="abc" and a group with chatId="abc" cannot collide.
+ */
+export function toAgentPeerKey(id: ChannelIdentity): string {
+  if (id.peerKind === 'group' && id.chatId) {
+    return `group:${id.chatId}:${id.peerId}`;
+  }
+  // 'direct' or 'channel' (no group-level fan-out for broadcast channels)
+  return `${id.peerKind}:${id.peerId}`;
 }
 
 /** 入站消息（IM → OpenLobby） */
@@ -116,10 +149,32 @@ export interface ChannelBinding {
   /** 当前活跃的 sessionId（lobby-manager 模式下可动态切换） */
   activeSessionId: string | null;
   /**
-   * NEW: when set, this binding is driven by an Agent template.
-   * Presence implies the binding is locked (no /exit, /goto, or LM routing).
+   * @deprecated Use ChannelAccountBinding for account-level Agent bindings.
+   * Historically this field was used at peer-level for Agent routing; on a
+   * fresh DB it will never be set. Kept in the type for read-side
+   * back-compatibility with rows migrated from older OpenLobby versions.
    */
   agentId?: string;
+  createdAt: number;
+  lastActiveAt: number;
+}
+
+/**
+ * Account-level binding: a whole IM bot account (channelName + accountId)
+ * routes to a single Agent. Applies to ALL peers — every 1:1 and every
+ * group involving this bot. Per-user/per-group session isolation happens
+ * downstream via SessionManager's per-peer fan-out (see toAgentPeerKey).
+ *
+ * Mutually exclusive with peer-level ChannelBinding rows on the same
+ * (channelName, accountId): either an account has an Agent (this table)
+ * OR per-peer session bindings (channel_bindings), never both.
+ */
+export interface ChannelAccountBinding {
+  /** "channelName:accountId" — PK */
+  accountKey: ChannelAccountKey;
+  channelName: string;
+  accountId: string;
+  agentId: string;
   createdAt: number;
   lastActiveAt: number;
 }

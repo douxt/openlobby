@@ -1,5 +1,6 @@
 import type {
   AgentDefinition,
+  ChannelAccountBinding,
   ChannelProvider,
   ChannelRouter,
   ChannelBinding,
@@ -36,7 +37,14 @@ import {
   getProvider as dbGetProvider,
   deleteProvider as dbDeleteProvider,
   toggleProvider as dbToggleProvider,
+  upsertAccountBinding,
+  getAccountBinding,
+  getAllAccountBindings,
+  deleteAccountBinding,
+  updateAccountBindingActivity,
+  getPeerBindingsForAccount,
   type ChannelBindingRow,
+  type ChannelAccountBindingRow,
 } from './db.js';
 import { createProvider } from './channels/index.js';
 import { randomUUID } from 'node:crypto';
@@ -288,10 +296,39 @@ export class ChannelRouterImpl implements ChannelRouter {
     return getAllBindings(this.db).map(rowToBinding);
   }
 
+  /**
+   * List all account-level Agent bindings. Used by both the WS event push and
+   * the HTTP / MCP read paths.
+   */
+  listAccountBindings(): ChannelAccountBinding[] {
+    return getAllAccountBindings(this.db).map(rowToAccountBinding);
+  }
+
+  /** Look up an account-level Agent binding (returns null when none). */
+  getAccountBindingFor(channelName: string, accountId: string): ChannelAccountBinding | null {
+    const row = getAccountBinding(this.db, channelName, accountId);
+    return row ? rowToAccountBinding(row) : null;
+  }
+
   bindSession(
     identityKey: string,
     sessionId: string,
   ): { ok: boolean; error?: string } {
+    // Mutual exclusivity: a peer-level session binding cannot coexist with an
+    // account-level Agent binding for the same (channelName, accountId).
+    const parts = identityKey.split(':');
+    const channelName = parts[0] ?? '';
+    const accountId = parts[1] ?? '';
+    if (channelName && accountId) {
+      const accountRow = getAccountBinding(this.db, channelName, accountId);
+      if (accountRow) {
+        return {
+          ok: false,
+          error: `Channel account "${channelName}:${accountId}" is locked to Agent "${accountRow.agent_id}". Unbind the Agent first.`,
+        };
+      }
+    }
+
     const lmSessionId = this.lobbyManager?.getSessionId();
     if (sessionId !== lmSessionId) {
       const existing = getBindingBySession(this.db, sessionId);
@@ -324,15 +361,31 @@ export class ChannelRouterImpl implements ChannelRouter {
   }
 
   /**
-   * Upsert a binding with an explicit target and optional agentId. Used by the
-   * WebSocket `channel.bind` handler when the UI binds a channel identity to
-   * either the Lobby Manager, a specific session, or an Agent template.
+   * Upsert a peer-level binding with an explicit target and optional agentId.
+   * Used by the WebSocket `channel.bind` handler when the UI binds a channel
+   * identity to either the Lobby Manager or a specific session.
+   *
+   * For account-level Agent bindings prefer `bindAgentToAccount` — this method
+   * throws when the (channel, account) is already locked to an Agent to
+   * preserve mutual exclusivity.
    */
   async bindIdentity(
     identity: ChannelIdentity,
     target: 'lobby-manager' | string,
     agentId?: string,
   ): Promise<ChannelBinding> {
+    // Mutual exclusivity: reject peer-level binds on accounts locked to Agents.
+    const accountRow = getAccountBinding(
+      this.db,
+      identity.channelName,
+      identity.accountId,
+    );
+    if (accountRow) {
+      throw new Error(
+        `Channel account "${identity.channelName}:${identity.accountId}" is locked to Agent "${accountRow.agent_id}". Unbind the Agent first.`,
+      );
+    }
+
     const identityKey = toIdentityKey(identity);
     const existing = getBinding(this.db, identityKey);
     const now = Date.now();
@@ -353,6 +406,40 @@ export class ChannelRouterImpl implements ChannelRouter {
     return rowToBinding(row);
   }
 
+  /**
+   * Bind an Agent to an entire IM bot account. All inbounds across every peer
+   * of (channelName, accountId) route to this Agent, fanned out per-peer by
+   * SessionManager. Returns a structured failure with `conflicts` when any
+   * peer-level rows exist for the same (channel, account); the caller surfaces
+   * those rows so the user can unbind them before retrying.
+   */
+  bindAgentToAccount(
+    channelName: string,
+    accountId: string,
+    agentId: string,
+  ): { ok: true; binding: ChannelAccountBinding } | { ok: false; conflicts: ChannelBinding[] } {
+    const conflicts = getPeerBindingsForAccount(this.db, channelName, accountId);
+    if (conflicts.length > 0) {
+      return { ok: false, conflicts: conflicts.map(rowToBinding) };
+    }
+    const now = Date.now();
+    const existing = getAccountBinding(this.db, channelName, accountId);
+    const row: ChannelAccountBindingRow = {
+      channel_name: channelName,
+      account_id: accountId,
+      agent_id: agentId,
+      created_at: existing?.created_at ?? now,
+      last_active_at: now,
+    };
+    upsertAccountBinding(this.db, row);
+    return { ok: true, binding: rowToAccountBinding(row) };
+  }
+
+  /** Remove an account-level Agent binding. No-op when none exists. */
+  unbindAgentFromAccount(channelName: string, accountId: string): void {
+    deleteAccountBinding(this.db, channelName, accountId);
+  }
+
   // ─── Inbound Message Handling ────────────────────────────────────
 
   async handleInbound(msg: InboundChannelMessage): Promise<void> {
@@ -361,6 +448,20 @@ export class ChannelRouterImpl implements ChannelRouter {
 
     if (msg.callbackData) {
       await this.handleCallback(msg.callbackData, msg.identity);
+      return;
+    }
+
+    // ── ACCOUNT-LEVEL AGENT BINDING (highest precedence) ──────────
+    // When the whole bot account is locked to an Agent, every inbound (every
+    // peer, every group) routes to that Agent. Peer-level rows are bypassed
+    // entirely — see bindAgentToAccount() for the mutual-exclusivity guarantee.
+    const accountRow = getAccountBinding(
+      this.db,
+      msg.identity.channelName,
+      msg.identity.accountId,
+    );
+    if (accountRow) {
+      await this.handleAccountBoundInbound(msg, accountRow);
       return;
     }
 
@@ -584,6 +685,77 @@ export class ChannelRouterImpl implements ChannelRouter {
       } else {
         await this.sendToChannel(msg.identity, `⚠️ 消息发送失败: ${errMsg}`);
       }
+    }
+  }
+
+  /**
+   * Route an inbound message under an account-level Agent binding.
+   *
+   * Account bindings span every peer of (channelName, accountId). The fan-out
+   * to a concrete per-peer ManagedSession happens inside
+   * `sessionManager.getOrCreateAgentSession`, which uses `toAgentPeerKey` to
+   * keep direct chats, groups, and group-members in distinct sessions.
+   *
+   * Slash commands that would switch or exit the locked Agent (/exit, /goto,
+   * /add) are rejected here so the locking semantics match the legacy
+   * peer-level Agent branch in `handleInbound`. The mention rule for group
+   * chats is also enforced before spawning anything.
+   */
+  private async handleAccountBoundInbound(
+    msg: InboundChannelMessage,
+    accountRow: ChannelAccountBindingRow,
+  ): Promise<void> {
+    const identityKey = toIdentityKey(msg.identity);
+    const agent = this.agentRegistry.get(accountRow.agent_id);
+    if (!agent) {
+      await this.sendToChannel(
+        msg.identity,
+        `⚠️ Agent not found (id=${accountRow.agent_id}). Please rebind via the OpenLobby Web UI.`,
+      );
+      return;
+    }
+    if (agent.deletedAt != null) {
+      await this.sendToChannel(
+        msg.identity,
+        `🚫 Agent "${agent.displayName}" has been removed. Ask an admin to recover it in the OpenLobby Web UI.`,
+      );
+      return;
+    }
+
+    // Reject session-switching slash commands while locked to an Agent.
+    const cmd = firstToken(msg.text);
+    if (LOCK_SLASH_COMMANDS.has(cmd)) {
+      await this.sendToChannel(
+        msg.identity,
+        `This chat is bound to Agent "${agent.displayName}" and cannot switch sessions. ` +
+          `Use the OpenLobby Web UI to change or unbind.`,
+      );
+      return;
+    }
+
+    // Group-chat mention rule — silently drop when agent shouldn't respond.
+    if (!shouldRespondInGroup(agent, msg)) {
+      return;
+    }
+
+    const session = await this.sessionManager.getOrCreateAgentSession(agent, msg.identity);
+
+    this.lastSenderBySession.set(session.id, identityKey);
+    this.messageOriginBySession.set(session.id, 'im');
+
+    // Keep account-level binding's lastActiveAt fresh for UI ordering.
+    updateAccountBindingActivity(
+      this.db,
+      msg.identity.channelName,
+      msg.identity.accountId,
+    );
+
+    try {
+      await this.sessionManager.sendMessage(session.id, msg.text);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error('[ChannelRouter] Account-bound Agent send failed:', errMsg);
+      await this.sendToChannel(msg.identity, `⚠️ Agent 消息发送失败: ${errMsg}`);
     }
   }
 
@@ -1615,13 +1787,23 @@ export class ChannelRouterImpl implements ChannelRouter {
       account_id: identity.accountId,
       peer_id: identity.peerId,
       peer_display_name: identity.peerDisplayName ?? null,
-      peer_kind: 'direct',
+      peer_kind: identity.peerKind ?? 'direct',
       target: 'lobby-manager',
       active_session_id: null,
       agent_id: null,
       created_at: now,
       last_active_at: now,
     };
+
+    // Defensive: if an account-level Agent binding owns this (channel, account),
+    // do NOT persist a peer-level LM default — those inbounds belong to the
+    // Agent path and have already been routed by handleAccountBoundInbound.
+    // Returning an in-memory row keeps callers happy without polluting the DB.
+    if (getAccountBinding(this.db, identity.channelName, identity.accountId)) {
+      console.log(`[ChannelRouter] Skip default binding for ${identityKey} — account locked to Agent`);
+      return row;
+    }
+
     upsertBinding(this.db, row);
     console.log(`[ChannelRouter] Auto-created binding for ${identityKey} → lobby-manager`);
 
@@ -1878,6 +2060,17 @@ function rowToBinding(row: ChannelBindingRow): ChannelBinding {
     target: row.target as 'lobby-manager' | string,
     activeSessionId: row.active_session_id,
     agentId: row.agent_id ?? undefined,
+    createdAt: row.created_at,
+    lastActiveAt: row.last_active_at,
+  };
+}
+
+function rowToAccountBinding(row: ChannelAccountBindingRow): ChannelAccountBinding {
+  return {
+    accountKey: `${row.channel_name}:${row.account_id}`,
+    channelName: row.channel_name,
+    accountId: row.account_id,
+    agentId: row.agent_id,
     createdAt: row.created_at,
     lastActiveAt: row.last_active_at,
   };

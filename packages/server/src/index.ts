@@ -10,7 +10,12 @@ import type { AgentAdapter } from '@openlobby/core';
 import { SessionManager } from './session-manager.js';
 import { detectTerminal } from './terminal-detector.js';
 import { handleWebSocket } from './ws-handler.js';
-import { initDb, getAllProviders, getAllAdapterPlugins } from './db.js';
+import {
+  initDb,
+  getAllProviders,
+  getAllAdapterPlugins,
+  migrateLegacyAgentBindings,
+} from './db.js';
 import { createBuiltinAdapters, loadAdapterPlugin } from './adapters/index.js';
 import { registerUploadRoute } from './upload.js';
 import { startMcpApi } from './mcp-api.js';
@@ -53,6 +58,10 @@ export async function createServer(options: ServerOptions = {}) {
   // Initialize SQLite — sessions from previous runs remain with their last status
   // They will be lazily resumed when the user sends a message
   const db = initDb();
+
+  // One-shot migration: lift legacy peer-level Agent bindings into the new
+  // account-level table. Idempotent — no-op on a fresh DB or after the first run.
+  migrateLegacyAgentBindings(db);
 
   // Version checker for update detection
   const versionChecker = new VersionChecker(options.version ?? '0.0.0');

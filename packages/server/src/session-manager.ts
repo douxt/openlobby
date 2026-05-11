@@ -16,6 +16,7 @@ import type {
   AgentDefinition,
   ChannelIdentity,
 } from '@openlobby/core';
+import { toAgentPeerKey } from '@openlobby/core';
 import type Database from 'better-sqlite3';
 import {
   upsertSession,
@@ -135,12 +136,18 @@ export class SessionManager {
   }
 
   private agentIndexKey(agentId: string, id: ChannelIdentity): string {
-    return `${agentId}:${id.channelName}:${id.accountId}:${id.peerId}`;
+    // Include the per-peer fan-out key so account-level Agent bindings spawn
+    // a distinct session per (chatId, peerId) inside a group while staying
+    // collapsed to a single session for 1:1 DMs.
+    return `${agentId}:${id.channelName}:${id.accountId}:${toAgentPeerKey(id)}`;
   }
 
   private peerHash(id: ChannelIdentity): string {
+    // Hash the fan-out tuple so the on-disk cwd directory matches the
+    // in-memory agentSessionIndex partitioning — otherwise two users in the
+    // same group would share a cwd and clobber each other's history.
     return createHash('sha256')
-      .update(`${id.channelName}:${id.accountId}:${id.peerId}`)
+      .update(`${id.channelName}:${id.accountId}:${toAgentPeerKey(id)}`)
       .digest('hex')
       .slice(0, 16);
   }

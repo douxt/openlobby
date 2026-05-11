@@ -21,6 +21,8 @@ export type { ClientMessage, ServerMessage } from './protocol.js';
 export type {
   ChannelIdentity,
   ChannelIdentityKey,
+  ChannelAccountKey,
+  ChannelAccountBinding,
   InboundChannelMessage,
   OutboundChannelMessage,
   ChannelProviderConfig,
@@ -33,7 +35,7 @@ export type {
   CommandGroup,
   CommandEntry,
 } from './channel.js';
-export { toIdentityKey } from './channel.js';
+export { toIdentityKey, toAccountKey, toAgentPeerKey } from './channel.js';
 
 export type {
   AgentDefinition,

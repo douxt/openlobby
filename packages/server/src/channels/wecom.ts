@@ -137,6 +137,7 @@ export class WeComBotProvider implements ChannelProvider {
           accountId: this.accountId,
           peerId,
           peerKind: mapWeComChatTypeToPeerKind(body.chattype),
+          chatId: body.chatid,
         },
         text: messageText,
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -166,6 +167,7 @@ export class WeComBotProvider implements ChannelProvider {
           accountId: this.accountId,
           peerId,
           peerKind: mapWeComChatTypeToPeerKind(body.chattype),
+          chatId: body.chatid,
         },
         text: body.voice.content || '[语音消息]',
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -205,6 +207,7 @@ export class WeComBotProvider implements ChannelProvider {
           accountId: this.accountId,
           peerId,
           peerKind: mapWeComChatTypeToPeerKind(body.chattype),
+          chatId: body.chatid,
         },
         text: '[图片]',
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -250,6 +253,7 @@ export class WeComBotProvider implements ChannelProvider {
           accountId: this.accountId,
           peerId,
           peerKind: mapWeComChatTypeToPeerKind(body.chattype),
+          chatId: body.chatid,
         },
         text: text || '[图文消息]',
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -288,6 +292,7 @@ export class WeComBotProvider implements ChannelProvider {
             accountId: this.accountId,
             peerId,
             peerKind: mapWeComChatTypeToPeerKind(body.chattype),
+            chatId: body.chatid,
           },
           text: '',
           timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
@@ -667,14 +672,11 @@ function parseMediaDirectives(text: string): {
  *
  * WeCom's bot webhook body carries `chattype: 'single' | 'group'` on every
  * BaseMessage (see @wecom/aibot-node-sdk). For group chats `chatid` is also
- * present. WeCom has no analogue of Telegram's broadcast "channel" peer, so
- * we only map to 'direct' or 'group'. Unknown/missing values default to
- * 'direct' as a safe fallback.
- *
- * Note: even though we populate peerKind correctly here, the current peerId
- * for group messages is still `body.from.userid`. If/when we want per-group
- * isolation in Agent mode, peerId for groups should likely be `body.chatid`
- * — that's a separate concern from this peerKind wiring.
+ * present and is now propagated into `ChannelIdentity.chatId` by the inbound
+ * handlers above; account-level Agent bindings rely on it for per-(group, user)
+ * session fan-out (see `toAgentPeerKey`). WeCom has no analogue of Telegram's
+ * broadcast "channel" peer, so we only map to 'direct' or 'group'. Unknown /
+ * missing values default to 'direct' as a safe fallback.
  */
 function mapWeComChatTypeToPeerKind(
   chatType: unknown,

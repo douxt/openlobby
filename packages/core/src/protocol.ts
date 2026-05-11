@@ -10,6 +10,7 @@ import type {
   ChannelProviderConfig,
   ChannelProviderInfo,
   ChannelBinding,
+  ChannelAccountBinding,
   ChannelPluginInfo,
 } from './channel.js';
 import type { AgentDefinition } from './agent.js';
@@ -53,6 +54,23 @@ export type ClientMessage =
       agentId?: string;
     }
   | { type: 'channel.unbind'; identityKey: string }
+  | { type: 'channel.list-account-bindings' }
+  | {
+      /**
+       * Bind an Agent to an entire IM bot account. Applies to every peer
+       * (every 1:1 and every group) of (channelName, accountId). Mutually
+       * exclusive with peer-level rows for the same (channel, account).
+       */
+      type: 'channel.bind-agent-to-account';
+      channelName: string;
+      accountId: string;
+      agentId: string;
+    }
+  | {
+      type: 'channel.unbind-agent-from-account';
+      channelName: string;
+      accountId: string;
+    }
   | { type: 'session.plan-mode'; sessionId: string; enabled: boolean }
   | { type: 'session.recover'; sessionId: string }
   | { type: 'completion.request'; sessionId: string }
@@ -112,6 +130,14 @@ export type ServerMessage =
   | { type: 'channel.bindings-list'; bindings: ChannelBinding[] }
   | { type: 'channel.binding-updated'; binding: ChannelBinding }
   | { type: 'channel.binding-removed'; identityKey: string }
+  | { type: 'channel.account-bindings-list'; bindings: ChannelAccountBinding[] }
+  | { type: 'channel.account-binding-updated'; binding: ChannelAccountBinding }
+  | {
+      type: 'channel.account-binding-conflict';
+      channelName: string;
+      accountId: string;
+      conflicts: ChannelBinding[];
+    }
   | { type: 'completion.response'; sessionId: string; commands: AdapterCommand[]; cached?: boolean }
   | { type: 'channel.plugins-list'; plugins: ChannelPluginInfo[] }
   | { type: 'config.value'; key: string; value: string }

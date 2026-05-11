@@ -86,6 +86,20 @@ export function initDb(dbPath?: string): Database.Database {
       WHERE active_session_id IS NOT NULL
   `);
 
+  // Account-level Agent bindings: one Agent per (channelName, accountId).
+  // Mutually exclusive with peer-level rows in channel_bindings — enforced
+  // at the API layer (channel-router.ts), not by a DB constraint.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS channel_account_bindings (
+      channel_name   TEXT NOT NULL,
+      account_id     TEXT NOT NULL,
+      agent_id       TEXT NOT NULL,
+      created_at     INTEGER NOT NULL,
+      last_active_at INTEGER NOT NULL,
+      PRIMARY KEY (channel_name, account_id)
+    )
+  `);
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS session_commands (
       session_id   TEXT PRIMARY KEY,
@@ -348,6 +362,80 @@ export function updateBindingActivity(db: Database.Database, identityKey: string
   );
 }
 
+// ─── Channel Account Bindings (account-level Agent routing) ───────────
+
+export interface ChannelAccountBindingRow {
+  channel_name: string;
+  account_id: string;
+  agent_id: string;
+  created_at: number;
+  last_active_at: number;
+}
+
+export function upsertAccountBinding(
+  db: Database.Database,
+  row: ChannelAccountBindingRow,
+): void {
+  db.prepare(`
+    INSERT OR REPLACE INTO channel_account_bindings
+      (channel_name, account_id, agent_id, created_at, last_active_at)
+    VALUES
+      (@channel_name, @account_id, @agent_id, @created_at, @last_active_at)
+  `).run(row);
+}
+
+export function getAccountBinding(
+  db: Database.Database,
+  channelName: string,
+  accountId: string,
+): ChannelAccountBindingRow | undefined {
+  return db.prepare(
+    'SELECT * FROM channel_account_bindings WHERE channel_name = ? AND account_id = ?',
+  ).get(channelName, accountId) as ChannelAccountBindingRow | undefined;
+}
+
+export function getAllAccountBindings(db: Database.Database): ChannelAccountBindingRow[] {
+  return db
+    .prepare('SELECT * FROM channel_account_bindings ORDER BY last_active_at DESC')
+    .all() as ChannelAccountBindingRow[];
+}
+
+export function deleteAccountBinding(
+  db: Database.Database,
+  channelName: string,
+  accountId: string,
+): void {
+  db.prepare(
+    'DELETE FROM channel_account_bindings WHERE channel_name = ? AND account_id = ?',
+  ).run(channelName, accountId);
+}
+
+export function updateAccountBindingActivity(
+  db: Database.Database,
+  channelName: string,
+  accountId: string,
+): void {
+  db.prepare(
+    'UPDATE channel_account_bindings SET last_active_at = ? WHERE channel_name = ? AND account_id = ?',
+  ).run(Date.now(), channelName, accountId);
+}
+
+/**
+ * Mutual-exclusivity check: list all peer-level rows under a given
+ * (channel, account) that would conflict with creating an account-level
+ * Agent binding. Callers use this to reject the bind request and surface
+ * the conflicting rows to the user.
+ */
+export function getPeerBindingsForAccount(
+  db: Database.Database,
+  channelName: string,
+  accountId: string,
+): ChannelBindingRow[] {
+  return db.prepare(
+    'SELECT * FROM channel_bindings WHERE channel_name = ? AND account_id = ?',
+  ).all(channelName, accountId) as ChannelBindingRow[];
+}
+
 export function clearBindingsBySession(db: Database.Database, sessionId: string): void {
   db.prepare('UPDATE channel_bindings SET active_session_id = NULL WHERE active_session_id = ?').run(sessionId);
 }
@@ -505,4 +593,114 @@ export function getSessionsByAgent(db: Database.Database, agentId: string): Sess
 /** Clear agent_id on bindings when the underlying session is removed. */
 export function clearBindingAgentBySession(db: Database.Database, sessionId: string): void {
   db.prepare('UPDATE channel_bindings SET agent_id = NULL WHERE active_session_id = ?').run(sessionId);
+}
+
+/**
+ * One-shot migration that lifts pre-account-binding peer-level Agent rows
+ * (channel_bindings.agent_id IS NOT NULL) up into channel_account_bindings.
+ *
+ * Idempotent:
+ *   - rows are grouped by (channel_name, account_id); the agent_id used is
+ *     the most-recently-active one in each group;
+ *   - if a target account binding already exists, the peer rows are removed
+ *     without changing the existing binding;
+ *   - on a fresh DB or after a previous run, the function is a no-op.
+ *
+ * Returns a tiny summary the caller can log/print.
+ */
+export interface LegacyAgentBindingMigrationResult {
+  /** Number of peer rows that had an agent_id BEFORE the migration ran. */
+  legacyRows: number;
+  /** Number of (channel, account) groups that produced a new account binding. */
+  promoted: number;
+  /** Number of (channel, account) groups that already had an account binding. */
+  skipped: number;
+  /** Distinct conflict groups (>1 agent_id under one (channel, account)). */
+  warnedConflicts: number;
+}
+
+export function migrateLegacyAgentBindings(
+  db: Database.Database,
+): LegacyAgentBindingMigrationResult {
+  const legacyRows = db
+    .prepare(`SELECT * FROM channel_bindings WHERE agent_id IS NOT NULL`)
+    .all() as ChannelBindingRow[];
+
+  if (legacyRows.length === 0) {
+    return { legacyRows: 0, promoted: 0, skipped: 0, warnedConflicts: 0 };
+  }
+
+  // Group by (channel_name, account_id) — within a group, prefer the agent_id
+  // from the row with the largest last_active_at.
+  interface Bucket {
+    channel: string;
+    account: string;
+    winner: ChannelBindingRow;
+    distinctAgentIds: Set<string>;
+    identityKeys: string[];
+  }
+  const buckets = new Map<string, Bucket>();
+  for (const row of legacyRows) {
+    const key = `${row.channel_name}:${row.account_id}`;
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = {
+        channel: row.channel_name,
+        account: row.account_id,
+        winner: row,
+        distinctAgentIds: new Set<string>([row.agent_id!]),
+        identityKeys: [row.identity_key],
+      };
+      buckets.set(key, bucket);
+    } else {
+      bucket.identityKeys.push(row.identity_key);
+      bucket.distinctAgentIds.add(row.agent_id!);
+      if (row.last_active_at > bucket.winner.last_active_at) {
+        bucket.winner = row;
+      }
+    }
+  }
+
+  let promoted = 0;
+  let skipped = 0;
+  let warnedConflicts = 0;
+
+  const tx = db.transaction(() => {
+    for (const bucket of buckets.values()) {
+      if (bucket.distinctAgentIds.size > 1) {
+        warnedConflicts++;
+        console.warn(
+          `[migration] (${bucket.channel}:${bucket.account}) had ${bucket.distinctAgentIds.size} distinct Agent bindings; picking the most-recently-active "${bucket.winner.agent_id}".`,
+        );
+      }
+      const existing = getAccountBinding(db, bucket.channel, bucket.account);
+      if (existing) {
+        // Caller has already set an account binding for this tuple — leave
+        // it alone and just drop the legacy peer rows.
+        skipped++;
+      } else {
+        upsertAccountBinding(db, {
+          channel_name: bucket.channel,
+          account_id: bucket.account,
+          agent_id: bucket.winner.agent_id!,
+          created_at: bucket.winner.created_at,
+          last_active_at: bucket.winner.last_active_at,
+        });
+        promoted++;
+      }
+      // Drop the migrated peer rows regardless — they cannot coexist with an
+      // account-level Agent binding under the new mutual-exclusivity rule.
+      const del = db.prepare(`DELETE FROM channel_bindings WHERE identity_key = ?`);
+      for (const ik of bucket.identityKeys) del.run(ik);
+    }
+  });
+  tx();
+
+  if (promoted + skipped > 0) {
+    console.log(
+      `[migration] Promoted ${promoted} peer-level Agent bindings to account-level (${skipped} already had account bindings, ${warnedConflicts} conflict groups).`,
+    );
+  }
+
+  return { legacyRows: legacyRows.length, promoted, skipped, warnedConflicts };
 }

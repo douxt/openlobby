@@ -462,8 +462,79 @@ export function handleWebSocket(
 
         case 'channel.unbind': {
           if (channelRouter) {
-            channelRouter.unbindSession(data.identityKey);
-            send({ type: 'channel.bindings-list', bindings: channelRouter.listBindings() });
+            // Disambiguate account-level vs peer-level unbind. The unified
+            // `channel.unbind` event passes the peer identityKey
+            // ("channel:account:peer"); we treat it as an account-level
+            // unbind when an account binding exists for (channel, account)
+            // and there is no matching peer-level row.
+            const parts = data.identityKey.split(':');
+            const channelName = parts[0] ?? '';
+            const accountId = parts[1] ?? '';
+            const accountRow = channelName && accountId
+              ? channelRouter.getAccountBindingFor(channelName, accountId)
+              : null;
+            const peerRowExists = !!data.identityKey
+              ? Boolean(channelRouter.listBindings().find((b) => b.identityKey === data.identityKey))
+              : false;
+            if (accountRow && !peerRowExists) {
+              channelRouter.unbindAgentFromAccount(channelName, accountId);
+              broadcastToAll({
+                type: 'channel.account-bindings-list',
+                bindings: channelRouter.listAccountBindings(),
+              });
+            } else {
+              channelRouter.unbindSession(data.identityKey);
+              send({ type: 'channel.bindings-list', bindings: channelRouter.listBindings() });
+            }
+          }
+          break;
+        }
+
+        case 'channel.list-account-bindings': {
+          if (channelRouter) {
+            send({
+              type: 'channel.account-bindings-list',
+              bindings: channelRouter.listAccountBindings(),
+            });
+          }
+          break;
+        }
+
+        case 'channel.bind-agent-to-account': {
+          if (channelRouter) {
+            const result = channelRouter.bindAgentToAccount(
+              data.channelName,
+              data.accountId,
+              data.agentId,
+            );
+            if (result.ok) {
+              broadcastToAll({
+                type: 'channel.account-binding-updated',
+                binding: result.binding,
+              });
+              broadcastToAll({
+                type: 'channel.account-bindings-list',
+                bindings: channelRouter.listAccountBindings(),
+              });
+            } else {
+              send({
+                type: 'channel.account-binding-conflict',
+                channelName: data.channelName,
+                accountId: data.accountId,
+                conflicts: result.conflicts,
+              });
+            }
+          }
+          break;
+        }
+
+        case 'channel.unbind-agent-from-account': {
+          if (channelRouter) {
+            channelRouter.unbindAgentFromAccount(data.channelName, data.accountId);
+            broadcastToAll({
+              type: 'channel.account-bindings-list',
+              bindings: channelRouter.listAccountBindings(),
+            });
           }
           break;
         }

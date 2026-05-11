@@ -377,15 +377,46 @@ function registerSessionRoutes(
     return channelRouter.listBindings();
   });
 
-  // Bind an IM user to a session
+  // Bind an IM user to a session OR an Agent to a whole bot account.
+  //
+  //  - When body has `agentId` plus `channelName` and `accountId`, an
+  //    account-level Agent binding is written via bindAgentToAccount.
+  //    Returns 409 with `{ conflicts: [...] }` when peer-level bindings
+  //    already exist on the same (channel, account).
+  //  - Otherwise the legacy `{ identityKey, sessionId }` shape applies a
+  //    peer-level session binding via bindSession.
   app.post<{
-    Body: { identityKey: string; sessionId: string };
+    Body: Partial<{
+      identityKey: string;
+      sessionId: string;
+      channelName: string;
+      accountId: string;
+      agentId: string;
+    }>;
   }>('/api/channels/bindings', async (request, reply) => {
     const channelRouter = getChannelRouter();
     if (!channelRouter) {
       return reply.status(503).send({ error: 'Channel router not initialized' });
     }
-    const { identityKey, sessionId } = request.body;
+
+    const { identityKey, sessionId, channelName, accountId, agentId } = request.body;
+
+    if (agentId && channelName && accountId) {
+      const result = channelRouter.bindAgentToAccount(channelName, accountId, agentId);
+      if (!result.ok) {
+        return reply.status(409).send({
+          error: `Channel account ${channelName}:${accountId} has peer-level bindings; remove them first.`,
+          conflicts: result.conflicts,
+        });
+      }
+      return { ok: true, binding: result.binding };
+    }
+
+    if (typeof identityKey !== 'string' || typeof sessionId !== 'string') {
+      return reply.status(400).send({
+        error: 'Bind requires either { identityKey, sessionId } (peer-level) or { channelName, accountId, agentId } (account-level).',
+      });
+    }
     const result = channelRouter.bindSession(identityKey, sessionId);
     if (!result.ok) {
       return reply.status(400).send({ error: result.error });
@@ -393,7 +424,7 @@ function registerSessionRoutes(
     return { ok: true, bindings: channelRouter.listBindings() };
   });
 
-  // Unbind an IM user
+  // Unbind an IM user (peer-level)
   app.delete<{ Params: { key: string } }>(
     '/api/channels/bindings/:key',
     async (request, reply) => {
@@ -403,6 +434,37 @@ function registerSessionRoutes(
       }
       try {
         channelRouter.unbindSession(decodeURIComponent(request.params.key));
+        return { ok: true };
+      } catch (err) {
+        return reply.status(400).send({
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+  );
+
+  // ─── Account-level Agent Binding Endpoints ─────────────────────────
+
+  app.get('/api/channels/account-bindings', async (_request, reply) => {
+    const channelRouter = getChannelRouter();
+    if (!channelRouter) {
+      return reply.status(503).send({ error: 'Channel router not initialized' });
+    }
+    return channelRouter.listAccountBindings();
+  });
+
+  app.delete<{ Params: { channelName: string; accountId: string } }>(
+    '/api/channels/account-bindings/:channelName/:accountId',
+    async (request, reply) => {
+      const channelRouter = getChannelRouter();
+      if (!channelRouter) {
+        return reply.status(503).send({ error: 'Channel router not initialized' });
+      }
+      try {
+        channelRouter.unbindAgentFromAccount(
+          decodeURIComponent(request.params.channelName),
+          decodeURIComponent(request.params.accountId),
+        );
         return { ok: true };
       } catch (err) {
         return reply.status(400).send({

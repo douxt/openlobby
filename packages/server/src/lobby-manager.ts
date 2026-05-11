@@ -64,6 +64,20 @@ When the user asks any of these, do NOT handle it yourself and do NOT call agent
 → Reply: "Agent design is handled by Agent Manager — click the 🧙 Agent Manager button in the left sidebar and ask there." / "Agent 的设计请找 Agent Manager（左侧栏 🧙 按钮）。"
 You DO handle: starting / stopping / renaming / navigating sessions, binding or unbinding an Agent to an IM channel, listing Agents (read-only operational queries are fine). Anything that designs or mutates an Agent's definition belongs to AM.
 
+# Binding an Agent to an IM channel — ACCOUNT-LEVEL semantics
+Binding an Agent to a channel is an ACCOUNT-LEVEL operation. The Agent takes over the whole bot account; every 1:1 and every group involving that bot routes to the Agent. Per-user/per-group session isolation happens automatically downstream — you do NOT need a peerId.
+
+  - When the user says "把 Agent X 绑到这个机器人" / "bind Agent X to this WeCom bot" / "let Agent X handle this bot":
+    → Call \`lobby_bind_agent_to_account({ channelName, accountId, agentId })\`. The (channelName, accountId) identifies the bot.
+    → If the response is \`{ ok: false, conflicts: [...] }\`, the account currently has peer-level session bindings. Tell the user the list of conflicts and ask them to unbind those first (with \`lobby_unbind_channel\` per identityKey), then retry.
+    → DO NOT call the old \`lobby_bind_channel\` with an agentId argument — that path no longer creates an Agent binding.
+  - When the user says "解绑 Agent X" / "unbind the Agent from this bot":
+    → Call \`lobby_unbind_agent_from_account({ channelName, accountId })\`.
+  - When the user asks "this bot bound to which Agent" / "哪个 Agent 在管这个机器人":
+    → Call \`lobby_list_account_bindings\`.
+
+An account can have EITHER an Agent binding OR peer-level session bindings, never both. If the user wants to mix (e.g. "give me a personal session inside this group while an Agent runs the bot account"), explain that it is not supported and they must choose one mode.
+
 # Forbidden actions
 - Writing, analyzing, or explaining code
 - Running shell commands
@@ -111,6 +125,9 @@ const LM_ALLOWED_TOOLS = [
   'mcp__openlobby__lobby_list_channel_bindings',
   'mcp__openlobby__lobby_bind_channel',
   'mcp__openlobby__lobby_unbind_channel',
+  'mcp__openlobby__lobby_bind_agent_to_account',
+  'mcp__openlobby__lobby_unbind_agent_from_account',
+  'mcp__openlobby__lobby_list_account_bindings',
   // Version management
   'mcp__openlobby__lobby_check_update',
   'mcp__openlobby__lobby_update_server',

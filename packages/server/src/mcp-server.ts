@@ -308,6 +308,55 @@ async function main() {
     },
   );
 
+  // ─── Account-level Agent Bindings ────────────────────────────────
+
+  // --- Tool: lobby_bind_agent_to_account ---
+  server.tool(
+    'lobby_bind_agent_to_account',
+    'Bind an Agent to an entire IM bot account (channelName + accountId). All peers (every 1:1 and every group) route to this Agent, fanned out per-(group, user). Mutually exclusive with peer-level session bindings on the same account — returns { ok:false, conflicts:[...] } when conflicts exist.',
+    {
+      channelName: z.string().describe('Channel name, e.g. "wecom" or "telegram"'),
+      accountId: z.string().describe('Bot/app ID for the channel account'),
+      agentId: z.string().describe('Agent definition id to lock the account to'),
+    },
+    async ({ channelName, accountId, agentId }) => {
+      const result = await apiCall('POST', '/api/channels/bindings', {
+        channelName,
+        accountId,
+        agentId,
+      });
+      return textResult(result);
+    },
+  );
+
+  // --- Tool: lobby_unbind_agent_from_account ---
+  server.tool(
+    'lobby_unbind_agent_from_account',
+    'Remove the account-level Agent binding for a given (channelName, accountId). Inbounds then fall back to peer-level routing.',
+    {
+      channelName: z.string().describe('Channel name, e.g. "wecom" or "telegram"'),
+      accountId: z.string().describe('Bot/app ID for the channel account'),
+    },
+    async ({ channelName, accountId }) => {
+      await apiCall(
+        'DELETE',
+        `/api/channels/account-bindings/${encodeURIComponent(channelName)}/${encodeURIComponent(accountId)}`,
+      );
+      return textResult({ ok: true, channelName, accountId });
+    },
+  );
+
+  // --- Tool: lobby_list_account_bindings ---
+  server.tool(
+    'lobby_list_account_bindings',
+    'List all account-level Agent bindings (each row locks a whole bot account to one Agent).',
+    {},
+    async () => {
+      const bindings = await apiCall('GET', '/api/channels/account-bindings');
+      return textResult(bindings);
+    },
+  );
+
   // ─── Agent CRUD Tools ────────────────────────────────────────────
 
   const AGENT_ADAPTER_ENUM = z.enum(['claude-code', 'codex-cli', 'opencode', 'gsd', 'any']);
