@@ -347,13 +347,20 @@ export class ChannelRouterImpl implements ChannelRouter {
     return { ok: true };
   }
 
+  /**
+   * Unbind a peer-level binding. The row is REMOVED from the table — there is
+   * no longer a half-state where "unbound" means "row still here, just pointed
+   * at LM". The next inbound from this peer will recreate a fresh default
+   * binding (or be routed by an account-level Agent binding if one exists).
+   *
+   * This matches the user's mental model: clicking "Unbind" should make the
+   * binding go away. Keeping ghost rows with stale agent_id was the cause of
+   * the "click Unbind, nothing happens" bug.
+   */
   unbindSession(identityKey: string): void {
     const binding = getBinding(this.db, identityKey);
     if (!binding) return;
-    updateBindingActiveSession(this.db, identityKey, null);
-    if (binding.target !== 'lobby-manager') {
-      upsertBinding(this.db, { ...binding, target: 'lobby-manager', active_session_id: null, last_active_at: Date.now() });
-    }
+    deleteBinding(this.db, identityKey);
   }
 
   removeBinding(identityKey: string): void {
@@ -372,7 +379,6 @@ export class ChannelRouterImpl implements ChannelRouter {
   async bindIdentity(
     identity: ChannelIdentity,
     target: 'lobby-manager' | string,
-    agentId?: string,
   ): Promise<ChannelBinding> {
     // Mutual exclusivity: reject peer-level binds on accounts locked to Agents.
     const accountRow = getAccountBinding(
@@ -398,7 +404,9 @@ export class ChannelRouterImpl implements ChannelRouter {
       peer_kind: identity.peerKind ?? existing?.peer_kind ?? 'direct',
       target,
       active_session_id: existing?.active_session_id ?? null,
-      agent_id: agentId ?? null,
+      // agent_id is intentionally always null at peer-level. Agent binding
+      // happens exclusively at account-level via bindAgentToAccount().
+      agent_id: null,
       created_at: existing?.created_at ?? now,
       last_active_at: now,
     };
@@ -480,79 +488,19 @@ export class ChannelRouterImpl implements ChannelRouter {
       binding.peer_kind = msg.identity.peerKind;
     }
 
-    // ── AGENT PATH ─────────────────────────────────────────────
-    // When the binding points at an Agent definition, routing is locked:
-    // slash commands that would switch sessions are rejected, group-chat
-    // mention rules gate whether we respond at all, and every other inbound
-    // goes straight into the per-peer Agent session.
+    // Defensive cleanup: a peer-level row with agent_id set is leftover
+    // legacy state (account-level Agent binding lives in channel_account_bindings
+    // now). Wipe the agent_id so it can never resurrect a routing path; the
+    // user's "Unbind" click on this row will then fully delete it via
+    // unbindSession.
     if (binding.agent_id) {
-      const agent = this.agentRegistry.get(binding.agent_id);
-      if (!agent) {
-        await this.sendToChannel(
-          msg.identity,
-          `⚠️ Agent not found (id=${binding.agent_id}). Please rebind via the OpenLobby Web UI.`,
-        );
-        return;
-      }
-      if (agent.deletedAt != null) {
-        await this.sendToChannel(
-          msg.identity,
-          `🚫 Agent "${agent.displayName}" has been removed. Ask an admin to recover it in the OpenLobby Web UI.`,
-        );
-        return;
-      }
-
-      // Reject session-switching slash commands
-      const cmd = firstToken(msg.text);
-      if (LOCK_SLASH_COMMANDS.has(cmd)) {
-        await this.sendToChannel(
-          msg.identity,
-          `This chat is bound to Agent "${agent.displayName}" and cannot switch sessions. ` +
-            `Use the OpenLobby Web UI to change or unbind.`,
-        );
-        return;
-      }
-
-      // Group-chat mention rule — silently drop when agent shouldn't respond
-      if (!shouldRespondInGroup(agent, msg)) {
-        return;
-      }
-
-      // Spawn or reuse the per-peer Agent session
-      const session = await this.sessionManager.getOrCreateAgentSession(agent, msg.identity);
-
-      // Keep the binding in sync: point target + active_session_id at the
-      // concrete session. target may still be 'lobby-manager' from the
-      // initial Web UI bind, so upsert the full row here.
-      const now = Date.now();
-      upsertBinding(this.db, {
-        identity_key: identityKey,
-        channel_name: binding.channel_name,
-        account_id: binding.account_id,
-        peer_id: binding.peer_id,
-        peer_display_name: binding.peer_display_name,
-        peer_kind: binding.peer_kind,
-        target: session.id,
-        active_session_id: session.id,
-        agent_id: binding.agent_id,
-        created_at: binding.created_at,
-        last_active_at: now,
-      });
-      binding.target = session.id;
-      binding.active_session_id = session.id;
-      binding.last_active_at = now;
-
-      this.lastSenderBySession.set(session.id, identityKey);
-      this.messageOriginBySession.set(session.id, 'im');
-
-      try {
-        await this.sessionManager.sendMessage(session.id, msg.text);
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[ChannelRouter] Agent session send failed:`, errMsg);
-        await this.sendToChannel(msg.identity, `⚠️ Agent 消息发送失败: ${errMsg}`);
-      }
-      return;
+      console.warn(
+        `[ChannelRouter] Stripping leftover agent_id="${binding.agent_id}" from peer row ${identityKey} — Agent routing is account-level since v0.7.`,
+      );
+      this.db
+        .prepare('UPDATE channel_bindings SET agent_id = NULL WHERE identity_key = ?')
+        .run(identityKey);
+      binding.agent_id = null;
     }
 
     // Slash command interception — handled locally, never forwarded to AI agent

@@ -14,7 +14,7 @@ import type {
   ResumeOptions,
   SpawnOptions,
 } from '@openlobby/core';
-import { initDb, getBinding, upsertBinding } from '../db.js';
+import { initDb, getAccountBinding } from '../db.js';
 import { SessionManager } from '../session-manager.js';
 import { AgentRegistry } from '../agent-registry.js';
 import { ChannelRouterImpl } from '../channel-router.js';
@@ -132,27 +132,6 @@ function createStubProvider(
   };
 }
 
-function bindAgent(
-  db: Database.Database,
-  identity: ChannelIdentity,
-  agentId: string,
-): void {
-  const now = Date.now();
-  upsertBinding(db, {
-    identity_key: `${identity.channelName}:${identity.accountId}:${identity.peerId}`,
-    channel_name: identity.channelName,
-    account_id: identity.accountId,
-    peer_id: identity.peerId,
-    peer_display_name: identity.peerDisplayName ?? null,
-    peer_kind: identity.peerKind,
-    target: 'lobby-manager',
-    active_session_id: null,
-    agent_id: agentId,
-    created_at: now,
-    last_active_at: now,
-  });
-}
-
 function makeInbound(
   identity: ChannelIdentity,
   text: string,
@@ -165,7 +144,7 @@ function makeInbound(
   };
 }
 
-describe('ChannelRouter Agent routing', () => {
+describe('ChannelRouter account-bound Agent routing', () => {
   let tmp: string;
   let db: Database.Database;
   let agentsRoot: string;
@@ -175,6 +154,9 @@ describe('ChannelRouter Agent routing', () => {
   let router: ChannelRouterImpl;
   let sent: RecordedMessage[];
   let provider: ChannelProvider;
+
+  const CHANNEL = 'telegram';
+  const ACCOUNT = 'bot1';
 
   beforeEach(async () => {
     tmp = mkdtempSync(join(tmpdir(), 'ol-cr-agent-'));
@@ -191,11 +173,11 @@ describe('ChannelRouter Agent routing', () => {
     router = new ChannelRouterImpl(sessionManager, null, registry, db);
 
     sent = [];
-    provider = createStubProvider('telegram', 'bot1', sent);
+    provider = createStubProvider(CHANNEL, ACCOUNT, sent);
     await router.registerProvider(provider);
   });
 
-  it('silently drops group messages when the agent has no groupChat config', async () => {
+  it('silently drops group messages when the account-bound agent has no groupChat config', async () => {
     registry.create({
       id: 'reviewer',
       displayName: 'Code Reviewer',
@@ -203,15 +185,17 @@ describe('ChannelRouter Agent routing', () => {
       adapter: 'stub',
       contextFiles: [],
     });
+    const bindResult = router.bindAgentToAccount(CHANNEL, ACCOUNT, 'reviewer');
+    expect(bindResult.ok).toBe(true);
 
     const groupIdentity: ChannelIdentity = {
-      channelName: 'telegram',
-      accountId: 'bot1',
+      channelName: CHANNEL,
+      accountId: ACCOUNT,
       peerId: 'group-1',
       peerDisplayName: 'Group 1',
       peerKind: 'group',
+      chatId: 'group-1',
     };
-    bindAgent(db, groupIdentity, 'reviewer');
 
     await router.handleInbound(makeInbound(groupIdentity, 'hello bot'));
 
@@ -221,7 +205,7 @@ describe('ChannelRouter Agent routing', () => {
     expect(sent).toEqual([]);
   });
 
-  it('forwards group messages when mention pattern matches', async () => {
+  it('forwards group messages to the account-bound agent when mention pattern matches', async () => {
     registry.create({
       id: 'mentionbot',
       displayName: 'Mention Bot',
@@ -233,15 +217,17 @@ describe('ChannelRouter Agent routing', () => {
         requireMention: true,
       },
     });
+    const bindResult = router.bindAgentToAccount(CHANNEL, ACCOUNT, 'mentionbot');
+    expect(bindResult.ok).toBe(true);
 
     const groupIdentity: ChannelIdentity = {
-      channelName: 'telegram',
-      accountId: 'bot1',
+      channelName: CHANNEL,
+      accountId: ACCOUNT,
       peerId: 'group-2',
       peerDisplayName: 'Group 2',
       peerKind: 'group',
+      chatId: 'group-2',
     };
-    bindAgent(db, groupIdentity, 'mentionbot');
 
     // No mention → dropped
     await router.handleInbound(makeInbound(groupIdentity, 'just chatting'));
@@ -254,17 +240,12 @@ describe('ChannelRouter Agent routing', () => {
     const proc = adapter.spawnedProcesses[0]!;
     expect(proc.sentMessages).toEqual(['hey @bot please help']);
 
-    // Binding was updated to point at the real agent session
-    const updated = getBinding(
-      db,
-      `${groupIdentity.channelName}:${groupIdentity.accountId}:${groupIdentity.peerId}`,
-    );
-    expect(updated?.agent_id).toBe('mentionbot');
-    expect(updated?.active_session_id).toBe(proc.sessionId);
-    expect(updated?.target).toBe(proc.sessionId);
+    // Account-level binding still in place, pointing at the same agent.
+    const acct = getAccountBinding(db, CHANNEL, ACCOUNT);
+    expect(acct?.agent_id).toBe('mentionbot');
   });
 
-  it('rejects /exit in an Agent-bound DM with the lock message and does not spawn', async () => {
+  it('rejects /exit in an account-bound DM with the lock message and does not spawn', async () => {
     registry.create({
       id: 'locked',
       displayName: 'Locked Agent',
@@ -272,15 +253,16 @@ describe('ChannelRouter Agent routing', () => {
       adapter: 'stub',
       contextFiles: [],
     });
+    const bindResult = router.bindAgentToAccount(CHANNEL, ACCOUNT, 'locked');
+    expect(bindResult.ok).toBe(true);
 
     const dmIdentity: ChannelIdentity = {
-      channelName: 'telegram',
-      accountId: 'bot1',
+      channelName: CHANNEL,
+      accountId: ACCOUNT,
       peerId: 'user-9',
       peerDisplayName: 'User9',
       peerKind: 'direct',
     };
-    bindAgent(db, dmIdentity, 'locked');
 
     await router.handleInbound(makeInbound(dmIdentity, '/exit'));
 
@@ -296,7 +278,7 @@ describe('ChannelRouter Agent routing', () => {
     expect(sent[1]!.text).toContain('cannot switch sessions');
   });
 
-  it('replies with a removal notice when the agent is soft-deleted and does not spawn', async () => {
+  it('replies with a removal notice when the account-bound agent is soft-deleted and does not spawn', async () => {
     registry.create({
       id: 'gone',
       displayName: 'Gone Agent',
@@ -304,16 +286,17 @@ describe('ChannelRouter Agent routing', () => {
       adapter: 'stub',
       contextFiles: [],
     });
+    const bindResult = router.bindAgentToAccount(CHANNEL, ACCOUNT, 'gone');
+    expect(bindResult.ok).toBe(true);
     registry.softDelete('gone');
 
     const dmIdentity: ChannelIdentity = {
-      channelName: 'telegram',
-      accountId: 'bot1',
+      channelName: CHANNEL,
+      accountId: ACCOUNT,
       peerId: 'user-10',
       peerDisplayName: 'User10',
       peerKind: 'direct',
     };
-    bindAgent(db, dmIdentity, 'gone');
 
     await router.handleInbound(makeInbound(dmIdentity, 'anyone home?'));
 
@@ -323,11 +306,8 @@ describe('ChannelRouter Agent routing', () => {
     expect(sent[0]!.text).toContain('Gone Agent');
     expect(sent[0]!.text).toContain('has been removed');
 
-    // Binding is preserved (recovery path expects it to still be there)
-    const stillBound = getBinding(
-      db,
-      `${dmIdentity.channelName}:${dmIdentity.accountId}:${dmIdentity.peerId}`,
-    );
+    // Account-level binding is preserved (recovery path expects it to still be there).
+    const stillBound = getAccountBinding(db, CHANNEL, ACCOUNT);
     expect(stillBound?.agent_id).toBe('gone');
   });
 });

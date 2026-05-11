@@ -693,6 +693,15 @@ export function migrateLegacyAgentBindings(
       const del = db.prepare(`DELETE FROM channel_bindings WHERE identity_key = ?`);
       for (const ik of bucket.identityKeys) del.run(ik);
     }
+    // Defense in depth: nuke ANY remaining peer rows with agent_id set, even
+    // if they somehow escape the bucket loop. Agent routing is account-level
+    // now; a peer row with agent_id is by definition stale and cannot route.
+    const sweep = db.prepare(`DELETE FROM channel_bindings WHERE agent_id IS NOT NULL`).run();
+    if (sweep.changes > 0) {
+      console.warn(
+        `[migration] Swept ${sweep.changes} extra peer rows with stale agent_id outside the promote buckets.`,
+      );
+    }
   });
   tx();
 

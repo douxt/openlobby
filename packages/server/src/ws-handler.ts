@@ -423,38 +423,23 @@ export function handleWebSocket(
 
         case 'channel.bind': {
           if (channelRouter) {
-            // When the bind request carries an agentId we upsert a full binding
-            // via bindIdentity so the routing lock is persisted. Otherwise fall
-            // back to the legacy bindSession path (requires an existing binding).
+            // Peer-level binding is for sessions only. Agent binding goes
+            // through channel.bind-agent-to-account — the agentId argument on
+            // this event is no longer supported and is rejected to keep the
+            // two binding modes from leaking into each other.
             if (data.agentId) {
-              // identityKey format: "channelName:accountId:peerId" (peerId may
-              // contain ':' — everything after the second segment is peerId).
-              const parts = data.identityKey.split(':');
-              const channelName = parts[0] ?? '';
-              const accountId = parts[1] ?? '';
-              const peerId = parts.slice(2).join(':');
-              const identity: ChannelIdentity = {
-                channelName,
-                accountId,
-                peerId,
-                // Default — the real peerKind is overwritten on first inbound
-                // by the provider (see ChannelRouter.handleInbound sync block).
-                peerKind: 'direct',
-              };
-              try {
-                const binding = await channelRouter.bindIdentity(identity, data.target, data.agentId);
-                broadcastToAll({ type: 'channel.binding-updated', binding });
-                send({ type: 'channel.bindings-list', bindings: channelRouter.listBindings() });
-              } catch (err) {
-                send({ type: 'error', error: (err as Error).message });
-              }
+              send({
+                type: 'error',
+                error:
+                  'Agent binding is account-level. Use channel.bind-agent-to-account instead.',
+              });
+              break;
+            }
+            const result = channelRouter.bindSession(data.identityKey, data.target);
+            if (result.ok) {
+              send({ type: 'channel.bindings-list', bindings: channelRouter.listBindings() });
             } else {
-              const result = channelRouter.bindSession(data.identityKey, data.target);
-              if (result.ok) {
-                send({ type: 'channel.bindings-list', bindings: channelRouter.listBindings() });
-              } else {
-                send({ type: 'error', error: result.error ?? 'Bind failed' });
-              }
+              send({ type: 'error', error: result.error ?? 'Bind failed' });
             }
           }
           break;
