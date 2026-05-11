@@ -149,6 +149,10 @@ function ensureConnection(url: string) {
           if (data.previousId && data.previousId === state.lmSessionId) {
             state.setLmSessionId(data.session.id);
           }
+          // Track Agent Manager session ID changes
+          if (data.previousId && data.previousId === state.amSessionId) {
+            state.setAmSessionId(data.session.id);
+          }
         }
         break;
       case 'session.destroyed':
@@ -237,6 +241,14 @@ function ensureConnection(url: string) {
         }
         if (data.sessionId) {
           state.setLmSessionId(data.sessionId as string);
+        }
+        break;
+      case 'am.status':
+        if (data.available !== undefined) {
+          state.setAmAvailable(data.available as boolean);
+        }
+        if (data.sessionId) {
+          state.setAmSessionId(data.sessionId as string);
         }
         break;
       // ─── Channel messages ───

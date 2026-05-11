@@ -49,6 +49,8 @@ export const enMessages = {
   'sidebar.openLobbyManagerSession': 'Open Lobby Manager session',
   'sidebar.noCliAdapterAvailable': 'No CLI adapter available',
   'sidebar.lobbyManager': 'Lobby Manager',
+  'sidebar.openAgentManagerSession': 'Open Agent Manager session',
+  'sidebar.agentManager': 'Agent Manager',
   'sidebar.imChannels': 'IM Channels',
   'sidebar.themeTitle': 'Theme: {theme}',
   'sidebar.toggleLanguage': 'Toggle language',

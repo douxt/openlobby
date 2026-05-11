@@ -49,6 +49,8 @@ export const zhCNMessages = {
   'sidebar.openLobbyManagerSession': '打开 Lobby Manager 会话',
   'sidebar.noCliAdapterAvailable': '没有可用的 CLI 适配器',
   'sidebar.lobbyManager': 'Lobby Manager',
+  'sidebar.openAgentManagerSession': '打开 Agent Manager 会话',
+  'sidebar.agentManager': 'Agent Manager',
   'sidebar.imChannels': 'IM 渠道',
   'sidebar.themeTitle': '主题：{theme}',
   'sidebar.toggleLanguage': '切换语言',

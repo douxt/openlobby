@@ -204,6 +204,8 @@ export default function Sidebar() {
   const setShowDiscoverDialog = useLobbyStore((s) => s.setShowDiscoverDialog);
   const lmAvailable = useLobbyStore((s) => s.lmAvailable);
   const lmSessionId = useLobbyStore((s) => s.lmSessionId);
+  const amAvailable = useLobbyStore((s) => s.amAvailable);
+  const amSessionId = useLobbyStore((s) => s.amSessionId);
   const versionInfo = useVersionCheck();
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
   const [showChannelPanel, setShowChannelPanel] = useState(false);
@@ -223,7 +225,7 @@ export default function Sidebar() {
   const { locale, setLocale, t } = useI18nContext();
 
   const sortedSessions = Object.values(sessions)
-    .filter((s) => s.origin !== 'lobby-manager')
+    .filter((s) => s.origin !== 'lobby-manager' && s.origin !== 'agent-manager')
     // Agent-mode sessions are managed from the AgentsPanel / ChannelManagePanel
     // — they can fan out to one-per-peer which would spam the Sidebar with
     // near-identical rows. Hide them here; real-time `session.updated`
@@ -316,6 +318,29 @@ export default function Sidebar() {
             <span>&#x1F3E8;</span>
             <span className="font-medium">{t('sidebar.lobbyManager')}</span>
             {lmAvailable && (
+              <span className="ml-auto inline-block w-2 h-2 rounded-full bg-success" />
+            )}
+          </button>
+        </div>
+
+        <div className="px-4 py-2 border-t border-outline">
+          <button
+            onClick={() => {
+              if (amSessionId) {
+                handleSelectSession(amSessionId);
+              }
+            }}
+            disabled={!amAvailable || !amSessionId}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+              activeSessionId === amSessionId
+                ? 'bg-primary-surface text-primary border border-primary/30'
+                : 'bg-surface-elevated text-on-surface-secondary hover:bg-[var(--color-sidebar-hover)]'
+            } disabled:opacity-40 disabled:cursor-not-allowed`}
+            title={amAvailable ? t('sidebar.openAgentManagerSession') : t('sidebar.noCliAdapterAvailable')}
+          >
+            <span>&#x1F9D9;</span>
+            <span className="font-medium">{t('sidebar.agentManager')}</span>
+            {amAvailable && (
               <span className="ml-auto inline-block w-2 h-2 rounded-full bg-success" />
             )}
           </button>

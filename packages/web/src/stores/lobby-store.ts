@@ -95,6 +95,10 @@ interface LobbyState {
   lmAvailable: boolean;
   lmSessionId: string | null;
 
+  // Agent Manager state
+  amAvailable: boolean;
+  amSessionId: string | null;
+
   // Channel state
   channelProviders: ChannelProviderData[];
   channelBindings: ChannelBindingData[];
@@ -141,6 +145,10 @@ interface LobbyState {
   // Lobby Manager actions
   setLmAvailable: (available: boolean) => void;
   setLmSessionId: (id: string | null) => void;
+
+  // Agent Manager actions
+  setAmAvailable: (available: boolean) => void;
+  setAmSessionId: (id: string | null) => void;
 
   // Channel actions
   setChannelProviders: (providers: ChannelProviderData[]) => void;
@@ -199,6 +207,9 @@ export const useLobbyStore = create<LobbyState>((set) => ({
 
   lmAvailable: false,
   lmSessionId: null,
+
+  amAvailable: false,
+  amSessionId: null,
 
   channelProviders: [],
   channelBindings: [],
@@ -478,6 +489,10 @@ export const useLobbyStore = create<LobbyState>((set) => ({
   // Lobby Manager actions
   setLmAvailable: (available) => set({ lmAvailable: available }),
   setLmSessionId: (id) => set({ lmSessionId: id }),
+
+  // Agent Manager actions
+  setAmAvailable: (available) => set({ amAvailable: available }),
+  setAmSessionId: (id) => set({ amSessionId: id }),
 
   // Channel actions
   setChannelProviders: (providers) => set({ channelProviders: providers }),

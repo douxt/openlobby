@@ -51,6 +51,8 @@ export interface Messages {
   'sidebar.openLobbyManagerSession': string;
   'sidebar.noCliAdapterAvailable': string;
   'sidebar.lobbyManager': string;
+  'sidebar.openAgentManagerSession': string;
+  'sidebar.agentManager': string;
   'sidebar.imChannels': string;
   'sidebar.themeTitle': string;
   'sidebar.toggleLanguage': string;
