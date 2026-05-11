@@ -15,6 +15,7 @@ import { createBuiltinAdapters, loadAdapterPlugin } from './adapters/index.js';
 import { registerUploadRoute } from './upload.js';
 import { startMcpApi } from './mcp-api.js';
 import { LobbyManager } from './lobby-manager.js';
+import { AgentManager } from './agent-manager.js';
 import { AgentRegistry } from './agent-registry.js';
 import { ChannelRouterImpl } from './channel-router.js';
 import { createProvider } from './channels/index.js';
@@ -117,6 +118,10 @@ export async function createServer(options: ServerOptions = {}) {
   const lobbyManager = new LobbyManager(sessionManager, allAdapters, mcpApiPort, db);
   await lobbyManager.init();
 
+  // Initialize Agent Manager (sibling meta-agent specialized in Agent design)
+  const agentManager = new AgentManager(sessionManager, allAdapters, mcpApiPort, db);
+  await agentManager.init();
+
   // Initialize PTY Manager
   const ptyManager = new PtyManager();
 
@@ -153,6 +158,7 @@ export async function createServer(options: ServerOptions = {}) {
       Array.from(allAdapters.keys()).map((name) => [name, true]),
     ),
     lobbyManager: lobbyManager.isAvailable(),
+    agentManager: agentManager.isAvailable(),
     channelProviders: channelRouter.listProviders(),
   }));
 
@@ -248,7 +254,7 @@ export async function createServer(options: ServerOptions = {}) {
 
   // WebSocket endpoint
   app.get('/ws', { websocket: true }, (socket) => {
-    handleWebSocket(socket, sessionManager, agentRegistry, lobbyManager, channelRouter, ptyManager);
+    handleWebSocket(socket, sessionManager, agentRegistry, lobbyManager, channelRouter, ptyManager, agentManager);
   });
 
   // Serve web frontend static files if available

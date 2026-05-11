@@ -8,11 +8,13 @@ import type {
 } from '@openlobby/core';
 import type { SessionManager } from './session-manager.js';
 import type { LobbyManager } from './lobby-manager.js';
+import type { AgentManager } from './agent-manager.js';
 import type { ChannelRouterImpl } from './channel-router.js';
 import type { PtyManager } from './pty-manager.js';
 import type { AgentRegistry } from './agent-registry.js';
 import { handleSlashCommand } from './slash-commands.js';
 import { LM_WELCOME_TEXT } from './lm-welcome.js';
+import { AM_WELCOME_TEXT } from './am-welcome.js';
 import { startWeComQrFlow } from './channels/wecom-qr.js';
 
 /**
@@ -35,6 +37,7 @@ export function handleWebSocket(
   lobbyManager?: LobbyManager,
   channelRouter?: ChannelRouterImpl,
   ptyManager?: PtyManager,
+  agentManager?: AgentManager,
 ): void {
   activeSockets.add(socket);
   const listenerId = Math.random().toString(36).slice(2);
@@ -91,6 +94,14 @@ export function handleWebSocket(
     sessionId: lmSessionIdForWelcome ?? undefined,
   });
 
+  // Notify client of Agent Manager availability and session ID
+  const amSessionIdForWelcome = agentManager?.getSessionId();
+  send({
+    type: 'am.status',
+    available: agentManager?.isAvailable() ?? false,
+    sessionId: amSessionIdForWelcome ?? undefined,
+  });
+
   // Send adapter permission metadata so frontend can render native labels
   send({
     type: 'adapter.meta',
@@ -113,6 +124,18 @@ export function handleWebSocket(
       content: LM_WELCOME_TEXT,
     };
     send({ type: 'message', sessionId: lmSessionIdForWelcome, message: welcomeMsg });
+  }
+
+  // Send welcome message to AM session on first WebSocket connection
+  if (amSessionIdForWelcome) {
+    const amWelcomeMsg: LobbyMessage = {
+      id: `am-welcome-${listenerId}`,
+      sessionId: amSessionIdForWelcome,
+      timestamp: Date.now(),
+      type: 'assistant',
+      content: AM_WELCOME_TEXT,
+    };
+    send({ type: 'message', sessionId: amSessionIdForWelcome, message: amWelcomeMsg });
   }
 
   socket.on('message', async (raw: Buffer | string) => {
@@ -466,7 +489,8 @@ export function handleWebSocket(
             setServerConfig(configDb2, cfgKey, cfgValue);
             send({ type: 'config.value', key: cfgKey, value: cfgValue } as any);
 
-            // Special handling: if defaultAdapter changed, rebuild LobbyManager
+            // Special handling: if defaultAdapter changed, rebuild both meta-agents
+            // (LM + AM share the single defaultAdapter setting by design).
             if (cfgKey === 'defaultAdapter' && lobbyManager) {
               try {
                 await lobbyManager.rebuild(cfgValue);
@@ -477,6 +501,18 @@ export function handleWebSocket(
                 });
               } catch (err) {
                 send({ type: 'error', error: `LM rebuild failed: ${err instanceof Error ? err.message : String(err)}` });
+              }
+            }
+            if (cfgKey === 'defaultAdapter' && agentManager) {
+              try {
+                await agentManager.rebuild(cfgValue);
+                send({
+                  type: 'am.status',
+                  available: agentManager.isAvailable(),
+                  sessionId: agentManager.getSessionId() ?? undefined,
+                });
+              } catch (err) {
+                send({ type: 'error', error: `AM rebuild failed: ${err instanceof Error ? err.message : String(err)}` });
               }
             }
           }

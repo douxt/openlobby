@@ -103,6 +103,7 @@ export type ServerMessage =
   | { type: 'session.discovered'; sessions: SessionSummary[] }
   | { type: 'session.navigate'; sessionId: string }
   | { type: 'lm.status'; available: boolean; sessionId?: string }
+  | { type: 'am.status'; available: boolean; sessionId?: string }
   | { type: 'error'; sessionId?: string; error: string }
   | { type: 'session.open-terminal-result'; sessionId: string; ok: true; terminal: string }
   | { type: 'session.open-terminal-result'; sessionId: string; ok: false; resumeCommand: string; reason: string }

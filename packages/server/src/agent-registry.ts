@@ -35,7 +35,7 @@ export function getAgentSessionsRoot(agentId: string): string {
   return join(getAgentRoot(agentId), 'sessions');
 }
 
-const RESERVED_IDS = new Set(['lobby-manager']);
+const RESERVED_IDS = new Set(['lobby-manager', 'agent-manager']);
 
 function rowToDef(row: AgentDefinitionRow): AgentDefinition {
   return {

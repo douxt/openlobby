@@ -50,7 +50,7 @@ export interface ManagedSession {
   model?: string;
   permissionMode?: PermissionMode;
   lastMessage?: string;
-  origin: 'lobby' | 'cli' | 'lobby-manager';
+  origin: 'lobby' | 'cli' | 'lobby-manager' | 'agent-manager';
   messageMode?: MessageMode;
   /** Whether this session is pinned to the top of the sidebar */
   pinned: boolean;
@@ -499,8 +499,8 @@ export class SessionManager {
 
     process.on('exit', () => {
       if (isStale()) return;
-      // Lobby Manager stays idle on exit so it can be resumed
-      session.status = session.origin === 'lobby-manager'
+      // Meta-agent sessions (LM/AM) stay idle on exit so they can be resumed
+      session.status = (session.origin === 'lobby-manager' || session.origin === 'agent-manager')
         ? 'idle'
         : (process.status === 'error' ? 'error' : 'stopped');
       const prevId = this.syncSessionId(session);
@@ -510,8 +510,8 @@ export class SessionManager {
 
     process.on('error', () => {
       if (isStale()) return;
-      // Lobby Manager stays idle even on error so it can be resumed
-      session.status = session.origin === 'lobby-manager' ? 'idle' : 'error';
+      // Meta-agent sessions (LM/AM) stay idle even on error so they can be resumed
+      session.status = (session.origin === 'lobby-manager' || session.origin === 'agent-manager') ? 'idle' : 'error';
       const prevId = this.syncSessionId(session);
       this.persistSessionStatus(session);
       this.broadcastSessionUpdate(session, prevId);
@@ -543,7 +543,7 @@ export class SessionManager {
     adapterName: string,
     options: SpawnOptions,
     displayName?: string,
-    origin: 'lobby' | 'cli' | 'lobby-manager' = 'lobby',
+    origin: 'lobby' | 'cli' | 'lobby-manager' | 'agent-manager' = 'lobby',
   ): Promise<ManagedSession> {
     const adapter = this.adapters.get(adapterName);
     if (!adapter) {
@@ -580,7 +580,7 @@ export class SessionManager {
     adapterName: string,
     options: SpawnOptions,
     displayName: string,
-    origin: 'lobby' | 'cli' | 'lobby-manager' = 'lobby',
+    origin: 'lobby' | 'cli' | 'lobby-manager' | 'agent-manager' = 'lobby',
     extras?: { agentId?: string; channelIdentity?: ChannelIdentity },
   ): Promise<ManagedSession> {
     const adapter = this.adapters.get(adapterName);
@@ -623,7 +623,7 @@ export class SessionManager {
     adapterName: string;
     displayName: string;
     cwd: string;
-    origin: 'lobby' | 'cli' | 'lobby-manager';
+    origin: 'lobby' | 'cli' | 'lobby-manager' | 'agent-manager';
     model?: string;
     permissionMode?: PermissionMode;
     messageMode?: MessageMode;
@@ -921,7 +921,7 @@ export class SessionManager {
       messageCount: 0,
       model: row.model ?? undefined,
       permissionMode: effectivePermission,
-      origin: row.origin as 'lobby' | 'cli' | 'lobby-manager',
+      origin: row.origin as 'lobby' | 'cli' | 'lobby-manager' | 'agent-manager',
       messageMode: (row.message_mode as MessageMode) ?? undefined,
       pinned: row.pinned === 1,
       agentId: row.agent_id ?? undefined,
@@ -1302,7 +1302,7 @@ export class SessionManager {
           messageCount: 0,
           model: row.model ?? undefined,
           permissionMode: (row.permission_mode as PermissionMode | null) ?? undefined,
-          origin: row.origin as 'lobby' | 'cli' | 'lobby-manager',
+          origin: row.origin as 'lobby' | 'cli' | 'lobby-manager' | 'agent-manager',
           messageMode: (row.message_mode as MessageMode) ?? undefined,
           pinned: row.pinned === 1,
           tokenUsage: {

@@ -106,7 +106,7 @@ export interface SessionSummary {
   model?: string;
   permissionMode?: PermissionMode;
   cwd: string;
-  origin: 'lobby' | 'cli' | 'lobby-manager';
+  origin: 'lobby' | 'cli' | 'lobby-manager' | 'agent-manager';
   resumeCommand: string;
   jsonlPath?: string;
   messageMode?: MessageMode;
