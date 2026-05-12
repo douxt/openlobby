@@ -813,6 +813,40 @@ export class SessionManager {
     }
   }
 
+  /**
+   * Hot-reload: kill the CLI processes for every live session owned by the
+   * given agent so the next inbound from each peer re-spawns through
+   * getOrCreateAgentSession's resume branch (which reads the agent
+   * definition fresh — picking up the new systemPrompt, allowedTools,
+   * deniedTools, model, and permissionMode).
+   *
+   * Differs from stopAllSessionsForAgent in two key ways: the agent-session
+   * index is INTENTIONALLY preserved (the resume branch needs the existing
+   * session id to keep CLI-native history on disk), and bindings keep their
+   * agent_id (the agent still exists, just got updated).
+   *
+   * `running` and `awaiting_approval` sessions are killed mid-flight — the
+   * caller's policy is "treat agent updates as authoritative even at the
+   * cost of an in-flight request". Already-stopped/errored sessions are
+   * left alone; they'll resume with fresh config on the next inbound anyway.
+   */
+  async reloadAllSessionsForAgent(agentId: string): Promise<{ killed: number; total: number }> {
+    const rows = this.db ? getSessionsByAgent(this.db, agentId) : [];
+    let killed = 0;
+    for (const row of rows) {
+      const session = this.sessions.get(row.id);
+      if (!session) continue;
+      if (session.status === 'stopped' || session.status === 'error') continue;
+      try {
+        session.process.kill();
+        killed++;
+      } catch {
+        // process may already be dead — ignore
+      }
+    }
+    return { killed, total: rows.length };
+  }
+
   configureSession(sessionId: string, options: Partial<SpawnOptions> & { messageMode?: MessageMode }): void {
     const session = this.sessions.get(sessionId);
     if (!session) throw new Error(`Session "${sessionId}" not found`);

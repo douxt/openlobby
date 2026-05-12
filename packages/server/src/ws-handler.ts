@@ -736,6 +736,24 @@ export function handleWebSocket(
         case 'agent.update': {
           try {
             const agent = agentRegistry.update(data.id, data.patch);
+            // Hot-reload: kill any live sessions owned by this agent so the
+            // next inbound resumes with the updated config (systemPrompt,
+            // tools, model, permissionMode). In-flight requests on running
+            // sessions are interrupted by design — the user's intent here
+            // is "make my changes take effect now".
+            try {
+              const result = await sessionManager.reloadAllSessionsForAgent(data.id);
+              if (result.killed > 0) {
+                console.log(
+                  `[Agent] Hot-reloaded ${result.killed}/${result.total} sessions for agent "${data.id}".`,
+                );
+              }
+            } catch (reloadErr) {
+              console.warn(
+                `[Agent] update succeeded but hot-reload failed for "${data.id}":`,
+                reloadErr,
+              );
+            }
             broadcastToAll({ type: 'agent.updated', agent });
           } catch (err) {
             send({ type: 'error', error: (err as Error).message });

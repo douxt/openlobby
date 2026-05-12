@@ -593,7 +593,25 @@ function registerAgentRoutes(
       // already omits them — caller's body type is `unknown`.
       const patch: Partial<AgentDefinition> = { ...parsed.data };
       try {
-        const updated = registry.update(decodeURIComponent(request.params.id), patch);
+        const agentId = decodeURIComponent(request.params.id);
+        const updated = registry.update(agentId, patch);
+        // Hot-reload live sessions so the next inbound picks up the new
+        // config (systemPrompt / tools / model / permissionMode). Failures
+        // here don't fail the update — the agent definition is the source
+        // of truth; reload is best-effort plumbing.
+        try {
+          const result = await sessionManager.reloadAllSessionsForAgent(agentId);
+          if (result.killed > 0) {
+            console.log(
+              `[Agent] Hot-reloaded ${result.killed}/${result.total} sessions for agent "${agentId}".`,
+            );
+          }
+        } catch (reloadErr) {
+          console.warn(
+            `[Agent] update succeeded but hot-reload failed for "${agentId}":`,
+            reloadErr,
+          );
+        }
         return updated;
       } catch (err) {
         return reply.status(400).send({
