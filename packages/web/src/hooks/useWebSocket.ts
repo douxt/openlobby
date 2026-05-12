@@ -111,8 +111,18 @@ function ensureConnection(url: string) {
       case 'session.created':
         if (data.session) {
           state.addSession(data.session);
-          // Don't auto-select Lobby Manager session — it's selected via the sidebar button
-          if (data.session.origin !== 'lobby-manager') {
+          // Auto-select rules — these mirror Sidebar.tsx's filter so the main
+          // session list and the auto-selection logic stay in sync:
+          //   · Lobby Manager session: only reachable via the 🏨 sidebar button
+          //   · Agent Manager session: only reachable via the 🧙 sidebar button
+          //   · Agent-bound (per-peer) sessions spawned by IM inbounds: live
+          //     under the Agents panel; auto-stealing focus here was the
+          //     "web jumps to IM session on every message" bug.
+          const isMetaSession =
+            data.session.origin === 'lobby-manager' ||
+            data.session.origin === 'agent-manager';
+          const isAgentBound = Boolean(data.session.agentId);
+          if (!isMetaSession && !isAgentBound) {
             state.setActiveSession(data.session.id);
           }
           // Apply default view mode from server config
@@ -127,7 +137,11 @@ function ensureConnection(url: string) {
           // If this is a new session we haven't seen, treat as created
           if (!state.sessions[data.session.id] && !data.previousId) {
             state.addSession(data.session);
-            if (data.session.origin !== 'lobby-manager') {
+            const isMetaSession =
+              data.session.origin === 'lobby-manager' ||
+              data.session.origin === 'agent-manager';
+            const isAgentBound = Boolean(data.session.agentId);
+            if (!isMetaSession && !isAgentBound) {
               state.setActiveSession(data.session.id);
               wsRequestSessionHistory(data.session.id);
             }
