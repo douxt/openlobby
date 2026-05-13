@@ -7,7 +7,7 @@
     "dev:parallel": "pnpm -r --parallel dev",
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "build:cli": "pnpm --filter openlobby build",
+    "build:cli": "pnpm --filter ./packages/cli build",
     "prepublish:cli": "pnpm build:cli",
     "publish:cli": "pnpm build:cli && cd packages/cli && npm publish"
   },

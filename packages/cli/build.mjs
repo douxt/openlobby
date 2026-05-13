@@ -10,6 +10,13 @@ const rootDir = join(__dirname, '..', '..');
 const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf-8'));
 const VERSION = pkg.version;
 
+// Pre-build workspace deps that `@openlobby/web` resolves at type-check time.
+// We can't rely on `pnpm -r build`'s topological order — once two builds run
+// concurrently, web's `tsc -b` raced ahead of core's emit on CI (TS2307:
+// Cannot find module '@openlobby/core'). Building serial here is reliable.
+console.log('[0/5] Building workspace deps (core)...');
+execSync('pnpm --filter @openlobby/core build', { cwd: rootDir, stdio: 'inherit' });
+
 console.log('[1/5] Building web frontend...');
 execSync('pnpm --filter @openlobby/web build', { cwd: rootDir, stdio: 'inherit' });
 
