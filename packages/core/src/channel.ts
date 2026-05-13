@@ -134,20 +134,26 @@ export interface ChannelQuote {
 export function formatInboundTextWithQuote(text: string, quote?: ChannelQuote): string {
   if (!quote) return text;
 
+  // Defensive coercion: adapters SHOULD only set string fields, but a buggy
+  // adapter or unexpected platform payload occasionally lets a non-string
+  // through (object/array). Don't crash — treat anything non-string as empty
+  // and let the media-type placeholder do its job.
+  const safeStr = (v: unknown): string => (typeof v === 'string' ? v : '');
   const sender =
-    quote.senderDisplayName?.trim() ||
-    quote.senderId?.trim() ||
+    safeStr(quote.senderDisplayName).trim() ||
+    safeStr(quote.senderId).trim() ||
     '未知发送者';
   const timeStr = quote.timestamp ? formatQuoteTimestamp(quote.timestamp) : '';
   const meta = timeStr ? `${sender} · ${timeStr}` : sender;
-  const quotedBody = (quote.text ?? '').trim() || placeholderForMediaType(quote.mediaType);
+  const quotedBody =
+    safeStr(quote.text).trim() || placeholderForMediaType(quote.mediaType);
 
   return [
     `[被引用消息 · ${meta}]`,
     quotedBody,
     `[引用结束]`,
     '',
-    text,
+    safeStr(text) || text,
   ].join('\n');
 }
 

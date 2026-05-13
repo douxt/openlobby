@@ -128,6 +128,10 @@ export class WeComBotProvider implements ChannelProvider {
       // Detect quote/reply message. The router renders the final text with
       // structured quote markup — we just pass the raw user message + quote.
       const quote = parseQuoteMessage(body);
+      // `body.text.content` is normally a string but WeCom occasionally
+      // sends rich/object payloads. Force a string so downstream never sees
+      // an "[object Object]" stringification or trim() crash.
+      const userText = coerceQuoteContent(body.text?.content) || '';
 
       router.handleInbound({
         externalMessageId: body.msgid,
@@ -138,7 +142,7 @@ export class WeComBotProvider implements ChannelProvider {
           peerKind: mapWeComChatTypeToPeerKind(body.chattype),
           chatId: body.chatid,
         },
-        text: body.text.content,
+        text: userText,
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
         quote: quote ?? undefined,
         raw: frame,
@@ -645,6 +649,11 @@ function parseMixedContent(body: Record<string, any>): {
  * `body.quote` (for other types when the quoted message is anything but plain
  * text). When the quoted message is media-only, `content` / `text` are empty —
  * we substitute a placeholder so downstream context is never blank.
+ *
+ * Robustness: WeCom occasionally sends non-string `content` (array of mixed
+ * segments, object with nested fields) when the quoted message was itself
+ * mixed/rich. We coerce defensively so downstream code never sees a non-string
+ * `text` and never crashes on `.trim()`.
  */
 function parseQuoteMessage(body: Record<string, any>): ChannelQuote | null {
   const quote = body.text?.quote ?? body.quote;
@@ -657,10 +666,11 @@ function parseQuoteMessage(body: Record<string, any>): ChannelQuote | null {
   }
 
   const mediaType = inferQuoteMediaType(quote);
-  const rawText: string =
-    (quote.content ?? quote.text ?? quote.title ?? '') as string;
+  const rawText = coerceQuoteContent(
+    quote.content ?? quote.text ?? quote.title ?? quote.body,
+  );
   return {
-    text: rawText || '',
+    text: rawText,
     senderId: quote.from?.userid,
     // WeCom doesn't expose a name on the bot webhook payload; leave undefined
     // and let formatInboundTextWithQuote fall back to senderId.
@@ -668,6 +678,40 @@ function parseQuoteMessage(body: Record<string, any>): ChannelQuote | null {
     timestamp: quote.create_time ? quote.create_time * 1000 : undefined,
     mediaType,
   };
+}
+
+/**
+ * Best-effort string extractor for WeCom quote `content` / `text`. The same
+ * field can arrive as:
+ *   · undefined / null   → ""
+ *   · string             → return as-is
+ *   · array of segments  → concatenate the text-bearing segments
+ *   · object             → look at `text` / `content` recursively, then give up
+ * Anything we can't extract collapses to "" and the renderer substitutes a
+ * media-type placeholder.
+ */
+function coerceQuoteContent(raw: unknown): string {
+  if (raw == null) return '';
+  if (typeof raw === 'string') return raw;
+  if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw);
+  if (Array.isArray(raw)) {
+    return raw
+      .map((seg) => {
+        if (typeof seg === 'string') return seg;
+        if (seg && typeof seg === 'object') {
+          const obj = seg as Record<string, unknown>;
+          return coerceQuoteContent(obj.text ?? obj.content);
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join(' ');
+  }
+  if (typeof raw === 'object') {
+    const obj = raw as Record<string, unknown>;
+    return coerceQuoteContent(obj.text ?? obj.content);
+  }
+  return '';
 }
 
 function inferQuoteMediaType(quote: Record<string, any>): ChannelQuote['mediaType'] {

@@ -71,6 +71,38 @@ describe('formatInboundTextWithQuote', () => {
   });
 });
 
+describe('formatInboundTextWithQuote — defensive coercion', () => {
+  // Regression: WeCom (and possibly other providers) occasionally send a
+  // non-string `content` field when the quoted message was itself rich/mixed.
+  // The helper used to call `.trim()` directly and crash with
+  // "TypeError: (quote.text ?? '').trim is not a function".
+  it('does not crash when quote.text is an object', () => {
+    const out = formatInboundTextWithQuote('hi', {
+      text: { nested: 'oops' } as unknown as string,
+      senderDisplayName: '张三',
+    });
+    expect(out).toContain('张三');
+    expect(out).toContain('[空消息]');
+    expect(out.endsWith('hi')).toBe(true);
+  });
+
+  it('does not crash when quote.text is an array', () => {
+    const out = formatInboundTextWithQuote('hi', {
+      text: ['a', 'b'] as unknown as string,
+      mediaType: 'text',
+    });
+    expect(out).toContain('[空消息]');
+  });
+
+  it('falls back to placeholder when text is non-string AND mediaType is image', () => {
+    const out = formatInboundTextWithQuote('hi', {
+      text: { foo: 1 } as unknown as string,
+      mediaType: 'image',
+    });
+    expect(out).toContain('[图片]');
+  });
+});
+
 describe('ChannelQuote shape', () => {
   it('accepts every documented field as optional except text', () => {
     const minimal: ChannelQuote = { text: 'x' };
