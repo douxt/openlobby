@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.6.1 (2026-05-13)
+
+Patch release on top of v0.6.0: quote-context handling for IM messages goes from "partially working for text-only" to "properly structured across all message kinds", and Codex CLI top-level errors no longer disappear silently.
+
+### Features
+- **Structured quote context for inbound IM messages** (48394e2) — when a user @s the bot in reply to an earlier message, the agent now sees the quoted text wrapped in a clearly delimited block (`[被引用消息 · sender · time] … [引用结束]`) instead of a markdown blockquote prefix that LLMs frequently mis-attribute as part of the current instruction.
+  - New `ChannelQuote` interface in core with `senderDisplayName` and `mediaType` (`text` / `image` / `voice` / `file`).
+  - New `formatInboundTextWithQuote(text, quote)` helper applied once at the top of `ChannelRouter.handleInbound`, so account-bound Agent path, peer-level session path, slash commands and LM fallback all see the same formatted text.
+  - WeCom: quote parsing extended to **voice / image / mixed** message kinds (was text-only) — replying with a photo or voice no longer silently drops context.
+  - Telegram: `reply_to_message` now captures display name (`first_name [last_name]` with `username` fallback) and media type. Media-only replies (photo / voice / document) get a `[图片] / [语音] / [文件]` placeholder instead of being dropped.
+
+### Bug Fixes
+- **Tolerate non-string quote payloads from WeCom** (a39d439) — WeCom occasionally sends `body.text.content` or `body.quote.content` as an array or object when the quoted message itself was rich/mixed. The previous code crashed with `TypeError: (quote.text ?? "").trim is not a function` (message silently dropped) or surfaced `[object Object]` to the agent. `parseQuoteMessage` and `formatInboundTextWithQuote` now coerce defensively: strings pass through, arrays/objects are flattened to text where possible, and an empty result falls through to the media-type placeholder.
+- **Surface Codex CLI top-level `error` notifications** (4e46171) — relay / capacity errors like `serverOverloaded` (and any other JSON-RPC `method: 'error'`) used to hit the adapter's default branch, log one line, and leave the session stuck in `running` with no user-visible message. Now they emit a `result` `LobbyMessage` with `meta.isError`, carrying `code` (`codexErrorInfo`), `willRetry`, and the original message; when `willRetry === false` the process drops back to `idle` so the user can prompt again. Includes 4 regression tests in core. Thanks to @kkkkk1k1 (PR #11) for the diagnosis and tests.
+
+### Closed PRs
+- **PR #10** — preserved-quote-context fix: superseded by 48394e2 + a39d439 (structured format covers the same cases more robustly).
+- **PR #11** — Codex error surface: single substantive commit cherry-picked as 4e46171; the branch's older base would have rolled back the v0.6.1 quote work, so the PR was closed rather than merged.
+
 ## v0.6.0 (2026-05-13)
 
 The Agent release. OpenLobby grows a second meta-agent for designing Agents, lets you bind a whole IM bot account to an Agent (every peer routed in, per-user sessions fanned out), and hot-reloads Agent configuration so iterating on a prompt no longer requires restarts.
