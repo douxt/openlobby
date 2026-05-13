@@ -1,35 +1,51 @@
 # Changelog
 
-## v0.7.0 (Unreleased)
+## v0.6.0 (2026-05-13)
+
+The Agent release. OpenLobby grows a second meta-agent for designing Agents, lets you bind a whole IM bot account to an Agent (every peer routed in, per-user sessions fanned out), and hot-reloads Agent configuration so iterating on a prompt no longer requires restarts.
 
 ### Features
-- **Agent Manager (AM)** — new built-in meta-agent dedicated to Agent design and lifecycle. Sibling to Lobby Manager: LM operates, AM designs.
-  - Session scaffold mirroring LM, reading the same `defaultAdapter` server config (server/agent-manager.ts, am-welcome.ts)
-  - System prompt encoding four capability protocols (interview-driven creation, prompt review, diagnose-and-improve, template application), least-privilege tool-policy principles, and an enforced confirmation discipline for every mutating call
-  - Eight new `agent_*` MCP tools (`agent_list`, `agent_get`, `agent_create`, `agent_update`, `agent_delete`, `agent_recent_messages`, `agent_template_list`, `agent_template_apply`) with parallel `/api/agents` and `/api/agent-templates/*` HTTP routes
-  - 5 built-in Agent templates: customer-support, code-reviewer, group-light-assistant, standup-summarizer, alert-triager — TypeScript modules with `{{placeholder}}` fillIns and a render step that returns a draft `AgentDefinition` (no server-side draft store)
-  - Web sidebar 🧙 button promoted to peer-level with the 🏨 LM button; both rows are reserved for primary meta-agent entry points
-  - LM system prompt updated to redirect agent design / review / improvement requests to AM with bilingual trigger phrases
 
-### Documentation
-- `docs/agent-manager.md` — usage guide, template catalogue, boundary table with LM, deferred-feature triggers
+#### Agent foundation (core / server / web)
+- End-to-end Agent definitions: persistent `agent_definitions` table with `agent_id` / `peer_kind` columns (0070049), `AgentDefinition` / `peerKind` / `binding.agentId` types (d917e7b), `AgentRegistry` CRUD service with systemPrompt resolution (1d59d1d), shared `enforceToolPolicy` helper wired into all adapters (f817092), `SessionManager.getOrCreateAgentSession` with agent-session index and cascade stop (89ec80c), `ChannelRouter` Agent routing branch with mention rule and lock (6338616), WebSocket dispatch for `agent.*` messages and `binding.agentId` (031a581).
+- Agents management UI: Agents panel with CRUD and soft-delete (2ae7122), Agent session badges, binding dropdown option, sidebar entry (82c810a), agent sessions hidden from the default session feed to avoid spam (b824019), full en + zh-CN localisation (6d1024b).
+- Channels: populate `ChannelIdentity.peerKind` in Telegram and WeCom (ff17238).
 
-## v0.6.0 (2026-05-11)
+#### Agent Manager (AM) — design specialist (44f8509, e2c9d53, 742437b, e2f4d27, 274412b, ed0aed6, 0709b10)
+A new built-in meta-agent, sibling to Lobby Manager: LM operates, AM designs.
+- Session scaffold mirroring LM, reading the same `defaultAdapter` server config.
+- System prompt encoding four capability protocols (interview-driven creation, prompt review, diagnose-and-improve, template application), least-privilege tool-policy principles, and an enforced "draft, then confirm" discipline for every mutating call.
+- Eight `agent_*` MCP tools (`agent_list`, `agent_get`, `agent_create`, `agent_update`, `agent_delete`, `agent_recent_messages`, `agent_template_list`, `agent_template_apply`) with parallel `/api/agents` and `/api/agent-templates/*` HTTP routes.
+- 5 built-in Agent templates: customer-support, code-reviewer, group-light-assistant, standup-summarizer, alert-triager — TypeScript modules with `{{placeholder}}` fillIns and a render step returning a draft `AgentDefinition` (no server-side draft store).
+- Web sidebar 🧙 button promoted to peer-level with the 🏨 LM button; both rows reserved for primary meta-agent entry points.
+- LM system prompt updated to redirect agent design / review / improvement requests to AM with bilingual trigger phrases.
 
-### Features
-- **Agent Mode (core/server/web)** — end-to-end Agent definitions: persistent `agent_definitions` table with `agent_id` / `peer_kind` columns (0070049), `AgentDefinition` / `peerKind` / `binding.agentId` types (d917e7b), `AgentRegistry` CRUD service with systemPrompt resolution (1d59d1d), shared `enforceToolPolicy` helper wired into all adapters (f817092), `SessionManager.getOrCreateAgentSession` with agent-session index and cascade stop (89ec80c), `ChannelRouter` Agent routing branch with mention rule and lock (6338616), WebSocket dispatch for `agent.*` messages and `binding.agentId` (031a581).
-- **Agents management UI (web)** — Agents panel with CRUD and soft-delete (2ae7122), Agent session badges, binding dropdown option, sidebar entry (82c810a), hide agent sessions from default session lists to avoid spam (b824019), Agent UI localised to en + zh-CN (6d1024b).
-- **Channels** — populate `ChannelIdentity.peerKind` in Telegram and WeCom (ff17238).
+#### Account-level channel→Agent binding (cabf954, 70bb6e3)
+Binding an Agent to a channel is now an ACCOUNT-LEVEL operation. One `(channelName, accountId)` maps to one Agent; every 1:1 and every group involving that bot routes to the Agent, with per-`(chatId, userid)` session fan-out happening downstream — different users in the same group, and the same user across different groups, all get distinct sessions. Mutually exclusive per account: either an account-level Agent binding OR peer-level session bindings, never both.
+- New `channel_account_bindings` table and `ChannelAccountBinding` type with explicit exclusivity rules.
+- `ChannelIdentity.chatId` populated by WeCom and Telegram providers; `toAgentPeerKey` helper drives fan-out across direct + group + user dimensions.
+- Three new MCP tools — `lobby_bind_agent_to_account`, `lobby_unbind_agent_from_account`, `lobby_list_account_bindings` — and matching `/api/channels/account-bindings/*` HTTP routes. Bind requests on conflicting state return structured conflict lists so LM / UI can guide cleanup.
+- Idempotent startup migration: existing peer-level rows with `agent_id` are promoted to account-level on first boot of v0.6.0; users don't need to manually rebind.
+- ChannelManagePanel UI restructured around `(channel, account)` groups with an account-level Agent picker, conflict banners, and a "locked peer rows" expander when an Agent owns the account.
+
+#### Agent configuration hot-reload (898844a)
+Editing an Agent (system prompt, tools, model, permission mode) via AM or the Agents panel now kills the CLI processes of every live session owned by that agent. The agent-session index and bindings are intentionally preserved so the next inbound resumes through `getOrCreateAgentSession`'s existing resume branch — which reads the latest definition fresh. JSONL conversation history on disk is preserved across the reload. In-flight requests on running sessions are interrupted by design.
 
 ### Bug Fixes
-- Sync `agentSessionIndex` on session-id migration (4d54fc9)
-- Resume Agent sessions on natural death instead of re-spawning (fa4d9b3)
+- Sync `agentSessionIndex` on session-id migration (4d54fc9).
+- Resume Agent sessions on natural death instead of re-spawning (fa4d9b3).
+- `unbindSession` now fully deletes peer rows instead of leaving ghost rows with stale `agent_id` — clicking Unbind in the UI now has visible effect (96357a2).
+- Remove dead peer-level Agent routing path that resurrected migrated state when any leftover `agent_id` was present (96357a2).
+- Account-bound Agent replies now route back to the IM channel: added an in-memory `identityBySession` cache so `resolveResponseBinding` synthesizes a virtual binding row when no peer-level row exists in the DB (c438a0a).
+- Stop auto-stealing focus when an Agent receives an IM message: the web view no longer "teleports" into the agent's session whenever a different IM user @s the bot (671e683).
 
 ### Refactor
-- Collapse sidebar footer entries (IM / Agents / Settings) into a compact icon toolbar with badge counts — reclaims vertical space and gives room for future feature entries without pushing the session list off-screen (86b4f06)
+- Collapse sidebar footer entries (IM / Agents / Settings) into a compact icon toolbar with badge counts — reclaims vertical space and gives room for future feature entries without pushing the session list off-screen (86b4f06).
+- Remove the legacy `agentId` argument from `channel.bind` WS handler and `bindIdentity`; all Agent binding now flows through the dedicated account-level path. Migration sweeps any stragglers (96357a2).
 
 ### Documentation
-- Add Agent Mode design spec and implementation plan (7dac13f)
+- Add Agent Mode design spec and implementation plan (7dac13f).
+- `docs/agent-manager.md` — usage guide, 5-question interview script, template catalogue, boundary table with LM, deferred-feature triggers.
 
 ## v0.5.8 (2026-04-21)
 
