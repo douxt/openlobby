@@ -9,3 +9,5 @@ packages/cli/web/
 packages/cli/README.md
 .claude/settings.local.json
 .openlobby-cache/
+.bg-shell/
+.gsd/

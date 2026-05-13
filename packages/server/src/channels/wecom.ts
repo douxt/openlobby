@@ -7,6 +7,7 @@ import type {
   OutboundChannelMessage,
   CommandGroup,
   ChannelPeerKind,
+  ChannelQuote,
 } from '@openlobby/core';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -124,11 +125,9 @@ export class WeComBotProvider implements ChannelProvider {
         streamId: generateReqId('stream'),
       });
 
-      // Detect quote/reply message
+      // Detect quote/reply message. The router renders the final text with
+      // structured quote markup — we just pass the raw user message + quote.
       const quote = parseQuoteMessage(body);
-      const messageText = quote
-        ? `> ${quote.text}\n\n${body.text.content}`
-        : body.text.content;
 
       router.handleInbound({
         externalMessageId: body.msgid,
@@ -139,7 +138,7 @@ export class WeComBotProvider implements ChannelProvider {
           peerKind: mapWeComChatTypeToPeerKind(body.chattype),
           chatId: body.chatid,
         },
-        text: messageText,
+        text: body.text.content,
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
         quote: quote ?? undefined,
         raw: frame,
@@ -160,6 +159,7 @@ export class WeComBotProvider implements ChannelProvider {
         streamId: generateReqId('stream'),
       });
 
+      const voiceQuote = parseQuoteMessage(body);
       router.handleInbound({
         externalMessageId: body.msgid,
         identity: {
@@ -171,6 +171,7 @@ export class WeComBotProvider implements ChannelProvider {
         },
         text: body.voice.content || '[语音消息]',
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
+        quote: voiceQuote ?? undefined,
         raw: frame,
       }).catch((err) => this.log('error', 'voice handleInbound error:', err));
     });
@@ -200,6 +201,7 @@ export class WeComBotProvider implements ChannelProvider {
           : [{ type: 'image', url: imageUrl }];
       }
 
+      const imageQuote = parseQuoteMessage(body);
       router.handleInbound({
         externalMessageId: body.msgid,
         identity: {
@@ -211,6 +213,7 @@ export class WeComBotProvider implements ChannelProvider {
         },
         text: '[图片]',
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
+        quote: imageQuote ?? undefined,
         attachments,
         raw: frame,
       }).catch((err) => this.log('error', 'image handleInbound error:', err));
@@ -246,6 +249,7 @@ export class WeComBotProvider implements ChannelProvider {
         attachments.push({ type: a.type, url: a.url, filename: a.filename });
       }
 
+      const mixedQuote = parseQuoteMessage(body);
       router.handleInbound({
         externalMessageId: body.msgid,
         identity: {
@@ -257,6 +261,7 @@ export class WeComBotProvider implements ChannelProvider {
         },
         text: text || '[图文消息]',
         timestamp: (body.create_time ?? Date.now() / 1000) * 1000,
+        quote: mixedQuote ?? undefined,
         attachments: attachments.length > 0 ? attachments : undefined,
         raw: frame,
       }).catch((err) => this.log('error', 'mixed handleInbound error:', err));
@@ -634,21 +639,44 @@ function parseMixedContent(body: Record<string, any>): {
   return { text: textParts.join('\n'), rawAttachments };
 }
 
-/** Extract quote/reply context from a WeCom text message */
-function parseQuoteMessage(body: Record<string, any>): {
-  text: string;
-  senderId?: string;
-  timestamp?: number;
-} | null {
-  // WeCom quote messages include a quote field in the body
+/**
+ * Extract quote/reply context from any WeCom inbound message body. WeCom carries
+ * the quote either under `body.text.quote` (for text messages) or under
+ * `body.quote` (for other types when the quoted message is anything but plain
+ * text). When the quoted message is media-only, `content` / `text` are empty —
+ * we substitute a placeholder so downstream context is never blank.
+ */
+function parseQuoteMessage(body: Record<string, any>): ChannelQuote | null {
   const quote = body.text?.quote ?? body.quote;
   if (!quote) return null;
 
+  // Treat a bare string as a text-quote payload.
+  if (typeof quote === 'string') {
+    if (!quote) return null;
+    return { text: quote, mediaType: 'text' };
+  }
+
+  const mediaType = inferQuoteMediaType(quote);
+  const rawText: string =
+    (quote.content ?? quote.text ?? quote.title ?? '') as string;
   return {
-    text: typeof quote === 'string' ? quote : (quote.content ?? quote.text ?? ''),
+    text: rawText || '',
     senderId: quote.from?.userid,
+    // WeCom doesn't expose a name on the bot webhook payload; leave undefined
+    // and let formatInboundTextWithQuote fall back to senderId.
+    senderDisplayName: undefined,
     timestamp: quote.create_time ? quote.create_time * 1000 : undefined,
+    mediaType,
   };
+}
+
+function inferQuoteMediaType(quote: Record<string, any>): ChannelQuote['mediaType'] {
+  // Best-effort: WeCom sometimes attaches a `msgtype` or per-media subfield.
+  const t = (quote.msgtype ?? quote.type ?? '').toString().toLowerCase();
+  if (t === 'image' || quote.image) return 'image';
+  if (t === 'voice' || quote.voice) return 'voice';
+  if (t === 'file' || quote.file) return 'file';
+  return 'text';
 }
 
 /** Parse MEDIA: and FILE: directives from outbound text */

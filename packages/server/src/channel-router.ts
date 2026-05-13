@@ -15,7 +15,7 @@ import type {
   CommandGroup,
   ChannelPeerKind,
 } from '@openlobby/core';
-import { toIdentityKey } from '@openlobby/core';
+import { toIdentityKey, formatInboundTextWithQuote } from '@openlobby/core';
 import type Database from 'better-sqlite3';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
@@ -467,6 +467,16 @@ export class ChannelRouterImpl implements ChannelRouter {
     if (msg.callbackData) {
       await this.handleCallback(msg.callbackData, msg.identity);
       return;
+    }
+
+    // Fold quote context into the user-visible text so every downstream
+    // path (account-bound agent, peer-level session, slash commands, LM
+    // fallback) sees the same formatted message. Adapters pass `quote` as
+    // structured data; we render it with [被引用消息 …] markup so the LLM
+    // can cleanly tell "this is what I was replying to" from "this is what
+    // I'm asking now". When msg.quote is undefined the text is unchanged.
+    if (msg.quote) {
+      msg = { ...msg, text: formatInboundTextWithQuote(msg.text, msg.quote) };
     }
 
     // ── ACCOUNT-LEVEL AGENT BINDING (highest precedence) ──────────

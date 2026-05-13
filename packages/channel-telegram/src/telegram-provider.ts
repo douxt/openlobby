@@ -5,6 +5,7 @@ import type {
   OutboundChannelMessage,
   CommandGroup,
   ChannelPeerKind,
+  ChannelQuote,
 } from '@openlobby/core';
 import {
   TelegramBotApi,
@@ -387,19 +388,36 @@ export class TelegramBotProvider implements ChannelProvider {
     // Build text content
     let text = message.text ?? message.caption ?? '';
 
-    // Parse reply/quote context
-    let quote: { text: string; senderId?: string; timestamp?: number } | undefined;
+    // Parse reply/quote context. The router renders the final user-visible
+    // text with structured quote markup; we just emit a structured quote here
+    // and pass the raw user message through unchanged.
+    let quote: ChannelQuote | undefined;
     if (message.reply_to_message) {
       const replied = message.reply_to_message;
-      const repliedText = replied.text ?? replied.caption ?? '';
-      if (repliedText) {
+      const repliedText = (replied.text ?? replied.caption ?? '').trim();
+      const repliedMediaType: ChannelQuote['mediaType'] = replied.photo
+        ? 'image'
+        : replied.voice
+        ? 'voice'
+        : replied.document
+        ? 'file'
+        : 'text';
+      const repliedSenderName = replied.from
+        ? (replied.from.first_name ?? '') +
+          (replied.from.last_name ? ` ${replied.from.last_name}` : '') ||
+          replied.from.username ||
+          undefined
+        : undefined;
+      // Only emit a quote when we have any signal (text or media). Empty
+      // forwarded service messages get skipped.
+      if (repliedText || repliedMediaType !== 'text') {
         quote = {
           text: repliedText,
           senderId: replied.from ? String(replied.from.id) : undefined,
+          senderDisplayName: repliedSenderName,
           timestamp: replied.date * 1000,
+          mediaType: repliedMediaType,
         };
-        // Prepend quote context for the agent
-        text = `> ${repliedText.split('\n')[0]}\n\n${text}`;
       }
     }
 

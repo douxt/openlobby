@@ -81,11 +81,95 @@ export interface InboundChannelMessage {
   /** 原始平台消息对象 */
   raw?: unknown;
   /** Quoted/replied message context */
-  quote?: {
-    text: string;
-    senderId?: string;
-    timestamp?: number;
-  };
+  quote?: ChannelQuote;
+}
+
+/**
+ * Context attached when a user @s the bot in reply to an earlier message.
+ *
+ * Adapters populate this from their native quote/reply payload; the channel
+ * router then renders it into the user message via {@link formatInboundTextWithQuote}
+ * so the downstream agent can clearly tell "this is what I was replying to"
+ * from "this is what I'm asking now".
+ */
+export interface ChannelQuote {
+  /**
+   * The quoted message's text. For media-only quotes (image / voice / file)
+   * adapters MUST set a placeholder like "[图片]" / "[语音]" / "[文件]" so
+   * the downstream context is never empty.
+   */
+  text: string;
+  /** Sender's user id in the source IM. Undefined when the platform didn't provide it. */
+  senderId?: string;
+  /**
+   * Display-friendly sender name. Optional; falls back to senderId for rendering
+   * when absent. WeCom currently passes undefined here (no name resolution yet);
+   * Telegram populates from `from.first_name` / `username`.
+   */
+  senderDisplayName?: string;
+  /** When the quoted message was sent (ms epoch). */
+  timestamp?: number;
+  /**
+   * What kind of message was quoted. Used for the placeholder hint when the
+   * quoted body itself was media-only. Defaults to 'text'.
+   */
+  mediaType?: 'text' | 'image' | 'voice' | 'file';
+}
+
+/**
+ * Render an inbound user message together with its quote context using the
+ * format the agents consume. Tagged-Chinese block so LLMs can clearly tell
+ * "user is quoting this earlier message" apart from "user is asking THIS now".
+ *
+ * Shape:
+ *
+ *   [被引用消息 · {sender} · {time}]
+ *   {quoted text or placeholder}
+ *   [引用结束]
+ *
+ *   {user's current message}
+ *
+ * When `quote` is undefined the original text is returned unchanged.
+ */
+export function formatInboundTextWithQuote(text: string, quote?: ChannelQuote): string {
+  if (!quote) return text;
+
+  const sender =
+    quote.senderDisplayName?.trim() ||
+    quote.senderId?.trim() ||
+    '未知发送者';
+  const timeStr = quote.timestamp ? formatQuoteTimestamp(quote.timestamp) : '';
+  const meta = timeStr ? `${sender} · ${timeStr}` : sender;
+  const quotedBody = (quote.text ?? '').trim() || placeholderForMediaType(quote.mediaType);
+
+  return [
+    `[被引用消息 · ${meta}]`,
+    quotedBody,
+    `[引用结束]`,
+    '',
+    text,
+  ].join('\n');
+}
+
+function placeholderForMediaType(t: ChannelQuote['mediaType']): string {
+  switch (t) {
+    case 'image':
+      return '[图片]';
+    case 'voice':
+      return '[语音]';
+    case 'file':
+      return '[文件]';
+    default:
+      return '[空消息]';
+  }
+}
+
+/** Format an epoch ms timestamp as "YYYY-MM-DD HH:mm" using the local timezone. */
+function formatQuoteTimestamp(ms: number): string {
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 /** 出站消息（OpenLobby → IM） */

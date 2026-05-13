@@ -32,10 +32,11 @@ export type {
   ChannelRouter,
   ChannelPluginModule,
   ChannelPluginInfo,
+  ChannelQuote,
   CommandGroup,
   CommandEntry,
 } from './channel.js';
-export { toIdentityKey, toAccountKey, toAgentPeerKey } from './channel.js';
+export { toIdentityKey, toAccountKey, toAgentPeerKey, formatInboundTextWithQuote } from './channel.js';
 
 export type {
   AgentDefinition,
