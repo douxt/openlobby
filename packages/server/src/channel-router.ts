@@ -15,7 +15,7 @@ import type {
   CommandGroup,
   ChannelPeerKind,
 } from '@openlobby/core';
-import { toIdentityKey, formatInboundTextWithQuote } from '@openlobby/core';
+import { toIdentityKey, formatInboundTextWithQuote, mergeQuoteAttachment } from '@openlobby/core';
 import type Database from 'better-sqlite3';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
@@ -475,7 +475,14 @@ export class ChannelRouterImpl implements ChannelRouter {
     // structured data; we render it with [被引用消息 …] markup so the LLM
     // can cleanly tell "this is what I was replying to" from "this is what
     // I'm asking now". When msg.quote is undefined the text is unchanged.
+    //
+    // mergeQuoteAttachment ALSO pulls quote.attachment (if the adapter could
+    // resolve the quoted media) into msg.attachments — prepended so the agent
+    // receives "quoted media → current media" in reading order. This is what
+    // makes "@bot 回复图片 + 文字" work end-to-end: previously the agent only
+    // saw a "[图片]" placeholder; now it gets the bytes too.
     if (msg.quote) {
+      msg = mergeQuoteAttachment(msg);
       msg = { ...msg, text: formatInboundTextWithQuote(msg.text, msg.quote) };
     }
 
