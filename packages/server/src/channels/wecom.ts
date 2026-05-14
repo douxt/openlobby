@@ -104,7 +104,7 @@ export class WeComBotProvider implements ChannelProvider {
     });
 
     // Text messages
-    this.client.on('message.text', (frame) => {
+    this.client.on('message.text', async (frame) => {
       this.log('info', 'Text message handler fired');
       if (!frame.body) {
         this.log('warn', 'Text message has no body');
@@ -127,7 +127,10 @@ export class WeComBotProvider implements ChannelProvider {
 
       // Detect quote/reply message. The router renders the final text with
       // structured quote markup — we just pass the raw user message + quote.
-      const quote = parseQuoteMessage(body);
+      // When the quote is an image, also pull the image bytes into
+      // quote.attachment so the agent sees the actual screenshot, not just
+      // "[图片]".
+      const quote = await this.enrichQuoteWithMedia(parseQuoteMessage(body), body);
       // `body.text.content` is normally a string but WeCom occasionally
       // sends rich/object payloads. Force a string so downstream never sees
       // an "[object Object]" stringification or trim() crash.
@@ -150,7 +153,7 @@ export class WeComBotProvider implements ChannelProvider {
     });
 
     // Voice messages (use transcription)
-    this.client.on('message.voice', (frame) => {
+    this.client.on('message.voice', async (frame) => {
       if (!frame.body) return;
       const body = frame.body;
       if (this.isDuplicate(body.msgid)) return;
@@ -163,7 +166,7 @@ export class WeComBotProvider implements ChannelProvider {
         streamId: generateReqId('stream'),
       });
 
-      const voiceQuote = parseQuoteMessage(body);
+      const voiceQuote = await this.enrichQuoteWithMedia(parseQuoteMessage(body), body);
       router.handleInbound({
         externalMessageId: body.msgid,
         identity: {
@@ -205,7 +208,7 @@ export class WeComBotProvider implements ChannelProvider {
           : [{ type: 'image', url: imageUrl }];
       }
 
-      const imageQuote = parseQuoteMessage(body);
+      const imageQuote = await this.enrichQuoteWithMedia(parseQuoteMessage(body), body);
       router.handleInbound({
         externalMessageId: body.msgid,
         identity: {
@@ -253,7 +256,7 @@ export class WeComBotProvider implements ChannelProvider {
         attachments.push({ type: a.type, url: a.url, filename: a.filename });
       }
 
-      const mixedQuote = parseQuoteMessage(body);
+      const mixedQuote = await this.enrichQuoteWithMedia(parseQuoteMessage(body), body);
       router.handleInbound({
         externalMessageId: body.msgid,
         identity: {
@@ -595,6 +598,35 @@ export class WeComBotProvider implements ChannelProvider {
       this.log('error', 'downloadAndDecrypt error:', err);
       return null;
     }
+  }
+
+  /**
+   * Resolve the quoted message's media (currently image only) into a local
+   * attachment. WeCom delivers the quoted image's encrypted URL + aeskey on
+   * `body.quote.image` — same shape as a top-level image message — so we can
+   * reuse `downloadAndDecrypt`. Without this, agents only see "[图片]" text
+   * when a user replies to a screenshot, never the bytes.
+   *
+   * Voice/file quotes are out of scope for now — no real-world demand yet;
+   * upgrade trigger: a user actually replying to a voice/file expecting the
+   * agent to inspect the content.
+   */
+  private async enrichQuoteWithMedia(
+    quote: ChannelQuote | null,
+    body: Record<string, any>,
+  ): Promise<ChannelQuote | null> {
+    if (!quote || quote.mediaType !== 'image') return quote;
+    const rawQuote = body.text?.quote ?? body.quote;
+    const img = rawQuote && typeof rawQuote === 'object' ? rawQuote.image : undefined;
+    const url: string | undefined = img?.url;
+    if (!url) return quote;
+    const aeskey: string | undefined = img?.aeskey;
+    const localPath = await this.downloadAndDecrypt(url, aeskey, '.jpg');
+    if (!localPath) return quote;
+    return {
+      ...quote,
+      attachment: { type: 'image', path: localPath },
+    };
   }
 
   private isDuplicate(msgId: string): boolean {
