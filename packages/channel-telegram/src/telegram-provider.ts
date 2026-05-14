@@ -411,12 +411,36 @@ export class TelegramBotProvider implements ChannelProvider {
       // Only emit a quote when we have any signal (text or media). Empty
       // forwarded service messages get skipped.
       if (repliedText || repliedMediaType !== 'text') {
+        // Resolve the quoted media's URL when possible — without it the agent
+        // only sees the "[图片]" placeholder and can't actually look at what
+        // the user was pointing at.
+        let attachment: ChannelQuote['attachment'];
+        if (replied.photo && replied.photo.length > 0) {
+          const largest = replied.photo[replied.photo.length - 1];
+          const fileUrl = largest ? await this.getFileUrl(largest.file_id) : null;
+          if (fileUrl) attachment = { type: 'image', url: fileUrl };
+        } else if (replied.voice) {
+          const fileUrl = await this.getFileUrl(replied.voice.file_id);
+          if (fileUrl) attachment = { type: 'voice', url: fileUrl, mimeType: replied.voice.mime_type };
+        } else if (replied.document) {
+          const fileUrl = await this.getFileUrl(replied.document.file_id);
+          if (fileUrl) {
+            attachment = {
+              type: 'file',
+              url: fileUrl,
+              filename: replied.document.file_name,
+              mimeType: replied.document.mime_type,
+            };
+          }
+        }
+
         quote = {
           text: repliedText,
           senderId: replied.from ? String(replied.from.id) : undefined,
           senderDisplayName: repliedSenderName,
           timestamp: replied.date * 1000,
           mediaType: repliedMediaType,
+          attachment,
         };
       }
     }
