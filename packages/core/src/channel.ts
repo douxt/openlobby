@@ -68,9 +68,14 @@ export interface InboundChannelMessage {
   text: string;
   /** 时间戳 (ms) */
   timestamp: number;
-  /** 附件 */
+  /**
+   * 附件. Providers that locally download/decrypt media set `path`; remote-only
+   * media stays on `url`. The router accepts either (and has historically read
+   * `path` via duck-typing — now formalized in the contract).
+   */
   attachments?: Array<{
     type: 'image' | 'file' | 'voice';
+    path?: string;
     url?: string;
     base64?: string;
     filename?: string;
@@ -114,6 +119,28 @@ export interface ChannelQuote {
    * quoted body itself was media-only. Defaults to 'text'.
    */
   mediaType?: 'text' | 'image' | 'voice' | 'file';
+  /**
+   * The actual media bytes/URL of the quoted message, when the adapter was
+   * able to resolve them. Routers MUST merge this into the inbound message's
+   * `attachments` (prepended, so order is "quoted media → current media") so
+   * the downstream Agent receives the binary the user was pointing at — not
+   * just a textual placeholder.
+   *
+   * Adapters that cannot resolve the quoted media (e.g. platform only exposes
+   * a msgid reference) leave this undefined; the placeholder text remains
+   * the only signal in that case.
+   */
+  attachment?: {
+    type: 'image' | 'voice' | 'file';
+    /** Local filesystem path (preferred — already downloaded/decrypted). */
+    path?: string;
+    /** Remote URL (used when local download isn't possible). */
+    url?: string;
+    /** MIME hint; optional. */
+    mimeType?: string;
+    /** Original filename when relevant (files / documents). */
+    filename?: string;
+  };
 }
 
 /**
@@ -146,7 +173,8 @@ export function formatInboundTextWithQuote(text: string, quote?: ChannelQuote): 
   const timeStr = quote.timestamp ? formatQuoteTimestamp(quote.timestamp) : '';
   const meta = timeStr ? `${sender} · ${timeStr}` : sender;
   const quotedBody =
-    safeStr(quote.text).trim() || placeholderForMediaType(quote.mediaType);
+    safeStr(quote.text).trim() ||
+    placeholderForMediaType(quote.mediaType, quote.attachment != null);
 
   return [
     `[被引用消息 · ${meta}]`,
@@ -157,17 +185,62 @@ export function formatInboundTextWithQuote(text: string, quote?: ChannelQuote): 
   ].join('\n');
 }
 
-function placeholderForMediaType(t: ChannelQuote['mediaType']): string {
+/**
+ * Render the placeholder shown inside the [被引用消息 ...] block when the
+ * quoted body has no text. When `hasAttachment` is true the adapter has
+ * already pulled the media into the inbound message's attachments, so the
+ * placeholder gains a "（见附件）" hint to tell the LLM the binary IS available
+ * elsewhere in the prompt — not just referenced by name.
+ */
+function placeholderForMediaType(
+  t: ChannelQuote['mediaType'],
+  hasAttachment = false,
+): string {
+  const suffix = hasAttachment ? '（见附件）' : '';
   switch (t) {
     case 'image':
-      return '[图片]';
+      return `[图片${suffix}]`;
     case 'voice':
-      return '[语音]';
+      return `[语音${suffix}]`;
     case 'file':
-      return '[文件]';
+      return `[文件${suffix}]`;
     default:
       return '[空消息]';
   }
+}
+
+/**
+ * When the user @s the bot in reply to a media message, the adapter resolves
+ * the quoted media into `quote.attachment`. The router calls this helper to
+ * fold that attachment into the inbound `msg.attachments` array so downstream
+ * Agents receive the binary the user was pointing at — not just the textual
+ * `[图片（见附件）]` placeholder.
+ *
+ * Ordering: quoted media is prepended (index 0), so the LLM reads
+ * "what I'm replying to" before "what I'm sending now" when both are present.
+ *
+ * The function never mutates the input — returns the original reference when
+ * there's nothing to merge so callers can keep using strict-equality checks.
+ */
+export function mergeQuoteAttachment(msg: InboundChannelMessage): InboundChannelMessage {
+  const att = msg.quote?.attachment;
+  if (!att) return msg;
+  // Defensive: at least one of path/url/base64 must be present for the
+  // attachment to be useful downstream. Skip empty references.
+  if (!att.path && !att.url && (att as { base64?: string }).base64 == null) {
+    return msg;
+  }
+  const merged: NonNullable<InboundChannelMessage['attachments']>[number] = {
+    type: att.type,
+    path: att.path,
+    url: att.url,
+    filename: att.filename,
+    mimeType: att.mimeType,
+  };
+  return {
+    ...msg,
+    attachments: [merged, ...(msg.attachments ?? [])],
+  };
 }
 
 /** Format an epoch ms timestamp as "YYYY-MM-DD HH:mm" using the local timezone. */

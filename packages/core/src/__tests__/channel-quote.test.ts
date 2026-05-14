@@ -1,5 +1,25 @@
 import { describe, it, expect } from 'vitest';
-import { formatInboundTextWithQuote, type ChannelQuote } from '../channel.js';
+import {
+  formatInboundTextWithQuote,
+  mergeQuoteAttachment,
+  type ChannelQuote,
+  type InboundChannelMessage,
+} from '../channel.js';
+
+function inbound(overrides: Partial<InboundChannelMessage> = {}): InboundChannelMessage {
+  return {
+    externalMessageId: 'm1',
+    identity: {
+      channelName: 'wecom',
+      accountId: 'a1',
+      peerId: 'p1',
+      peerKind: 'direct',
+    },
+    text: 'hello',
+    timestamp: 1,
+    ...overrides,
+  };
+}
 
 describe('formatInboundTextWithQuote', () => {
   it('returns the original text unchanged when no quote is supplied', () => {
@@ -39,6 +59,46 @@ describe('formatInboundTextWithQuote', () => {
     expect(formatInboundTextWithQuote('啥图', { text: '', mediaType: 'image' })).toContain('[图片]');
     expect(formatInboundTextWithQuote('啥音', { text: '', mediaType: 'voice' })).toContain('[语音]');
     expect(formatInboundTextWithQuote('啥附件', { text: '', mediaType: 'file' })).toContain('[文件]');
+  });
+
+  it('annotates the placeholder when an attachment is supplied alongside the quote', () => {
+    // When the adapter has already pulled the quoted image into msg.attachments
+    // (via quote.attachment merge in the router), the placeholder should hint to
+    // the LLM that the media is materially available — not just referenced.
+    const out = formatInboundTextWithQuote('看看这张图哪里有问题', {
+      text: '',
+      mediaType: 'image',
+      attachment: { type: 'image', path: '/tmp/x.jpg' },
+    });
+    expect(out).toContain('[图片（见附件）]');
+    expect(out).not.toMatch(/\[图片\][^（]/); // bare "[图片]" should NOT appear standalone
+  });
+
+  it('annotates voice and file placeholders too when attachment is present', () => {
+    const v = formatInboundTextWithQuote('?', {
+      text: '',
+      mediaType: 'voice',
+      attachment: { type: 'voice', url: 'https://x/y.mp3' },
+    });
+    const f = formatInboundTextWithQuote('?', {
+      text: '',
+      mediaType: 'file',
+      attachment: { type: 'file', path: '/tmp/y.pdf', filename: 'y.pdf' },
+    });
+    expect(v).toContain('[语音（见附件）]');
+    expect(f).toContain('[文件（见附件）]');
+  });
+
+  it('keeps the quoted text body unchanged when the quote has both text AND an attachment', () => {
+    // Quoted message had a caption ("see this:") + an image. The text should
+    // still be the primary body; we don't replace it with a placeholder.
+    const out = formatInboundTextWithQuote('?', {
+      text: 'see this:',
+      mediaType: 'image',
+      attachment: { type: 'image', path: '/tmp/x.jpg' },
+    });
+    expect(out).toContain('see this:');
+    expect(out).not.toContain('[图片');
   });
 
   it('substitutes [空消息] when text is empty and mediaType is text/undefined', () => {
@@ -100,6 +160,91 @@ describe('formatInboundTextWithQuote — defensive coercion', () => {
       mediaType: 'image',
     });
     expect(out).toContain('[图片]');
+  });
+});
+
+describe('mergeQuoteAttachment', () => {
+  it('returns the same reference when there is no quote', () => {
+    const msg = inbound();
+    expect(mergeQuoteAttachment(msg)).toBe(msg);
+  });
+
+  it('returns the same reference when the quote carries no attachment', () => {
+    const msg = inbound({ quote: { text: 'q', mediaType: 'text' } });
+    expect(mergeQuoteAttachment(msg)).toBe(msg);
+  });
+
+  it('returns the same reference when the quote attachment is empty (no path/url/base64)', () => {
+    const msg = inbound({
+      quote: {
+        text: '',
+        mediaType: 'image',
+        attachment: { type: 'image' }, // nothing referenceable
+      },
+    });
+    expect(mergeQuoteAttachment(msg)).toBe(msg);
+  });
+
+  it('prepends the quote attachment when msg has no existing attachments', () => {
+    const msg = inbound({
+      quote: {
+        text: '',
+        mediaType: 'image',
+        attachment: { type: 'image', path: '/tmp/q.jpg' },
+      },
+    });
+    const out = mergeQuoteAttachment(msg);
+    expect(out).not.toBe(msg);
+    expect(out.attachments).toEqual([
+      { type: 'image', path: '/tmp/q.jpg', url: undefined, filename: undefined, mimeType: undefined },
+    ]);
+  });
+
+  it('prepends quote attachment in front of existing attachments (order: quoted → current)', () => {
+    const msg = inbound({
+      attachments: [{ type: 'image', path: '/tmp/current.jpg' }],
+      quote: {
+        text: '',
+        mediaType: 'image',
+        attachment: { type: 'image', path: '/tmp/quoted.jpg' },
+      },
+    });
+    const out = mergeQuoteAttachment(msg);
+    expect(out.attachments?.map((a) => a.path)).toEqual(['/tmp/quoted.jpg', '/tmp/current.jpg']);
+  });
+
+  it('does not mutate the input message', () => {
+    const msg = inbound({
+      attachments: [{ type: 'image', path: '/tmp/current.jpg' }],
+      quote: {
+        text: '',
+        mediaType: 'image',
+        attachment: { type: 'image', path: '/tmp/quoted.jpg' },
+      },
+    });
+    const originalAttachmentsRef = msg.attachments;
+    mergeQuoteAttachment(msg);
+    expect(msg.attachments).toBe(originalAttachmentsRef);
+    expect(msg.attachments).toHaveLength(1);
+  });
+
+  it('carries url + mimeType + filename through when path is absent', () => {
+    const msg = inbound({
+      quote: {
+        text: '',
+        mediaType: 'file',
+        attachment: {
+          type: 'file',
+          url: 'https://x/y.pdf',
+          mimeType: 'application/pdf',
+          filename: 'y.pdf',
+        },
+      },
+    });
+    const out = mergeQuoteAttachment(msg);
+    expect(out.attachments).toEqual([
+      { type: 'file', path: undefined, url: 'https://x/y.pdf', filename: 'y.pdf', mimeType: 'application/pdf' },
+    ]);
   });
 });
 
