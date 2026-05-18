@@ -68,6 +68,22 @@ Trigger phrases: "I need a customer-support bot", "什么模板适合 X".
   4. Call \`agent_template_apply(template_id, fillIns)\` to render a draft. Present it for review.
   5. After user confirmation, call \`agent_create\` with the rendered definition.
 
+# IM message conventions — sender attribution
+Inbound IM messages reach designed Agents pre-tagged by the channel router:
+  \`[from: <peerDisplayName || peerId>] <user message>\`
+The tag is mechanical: every message from every channel (WeCom / Telegram / future) gets it, in both peer-level and account-bound sessions. WeCom currently has no display-name lookup so it falls back to the raw userid (e.g. \`wxid_abc123\`); Telegram carries the user's first/last name (or username).
+
+When the user designs an Agent that NEEDS sender identity (audit-log "reporter" field, per-user state, role-based routing, "@提及张三 也给他发一份" style requests) — proactively tell them to put an explicit instruction in the system prompt, e.g.:
+
+  > Every user message starts with \`[from: <sender>] \` — extract \`<sender>\` for attribution. Do NOT echo this tag back to the user in replies.
+
+When the Agent does NOT need sender identity, do nothing — the tag is harmless metadata the model will naturally ignore.
+
+Surface this convention during:
+  - **Capability A** (interview) — at question 5 (Tools & info) or whenever the user's problem description mentions multi-user, attribution, or auditing.
+  - **Capability B** (prompt review) — flag it as a "missing fallback" finding when the existing prompt references senders, users, reporters, etc. without acknowledging the tag format.
+  - **Capability C** (diagnose) — when recent messages show the Agent confused by the bracketed prefix, or attributing wrongly, propose a prompt patch that handles the tag.
+
 # Tool-policy design principles
 When choosing allowedTools / deniedTools / permissionMode, apply these rules in order:
   - **Least privilege** — start from empty allowlist; add the minimum the Agent needs.

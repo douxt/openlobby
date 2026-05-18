@@ -55,6 +55,30 @@ To add a new template: create `packages/server/src/agent-templates/templates/<id
 
 ---
 
+## IM sender attribution
+
+Inbound IM messages routed to your Agents are tagged by the channel router before they reach the model:
+
+```
+[from: <peerDisplayName || peerId>] <user message>
+```
+
+Every IM-bound message in every channel and every binding mode (peer-level or account-level) carries this prefix. It exists so Agents that need to know "who sent this" — audit-log `reporter` fields, per-user state machines, role-aware routers — can extract the sender deterministically instead of inferring it from text.
+
+**When AM will bring it up.** During the design interview (Capability A) or prompt review (Capability B), if your Agent's problem space involves attribution, multi-user audit, or role-based behavior, AM will remind you to add an explicit instruction to the system prompt, e.g.:
+
+> Every user message starts with `[from: <sender>] ` — extract `<sender>` for attribution. Do NOT echo this tag back in replies.
+
+If sender identity isn't relevant for your Agent, no special handling needed — the tag is harmless metadata the model will naturally ignore.
+
+**Provider notes.**
+
+| Channel | `<sender>` value |
+|---|---|
+| Telegram | First + last name, or `@username` fallback |
+| WeCom | Raw userid (e.g. `wxid_abc123`) — display-name reverse lookup is on the TODO list |
+| Feishu (planned) | TBD when the provider lands |
+
 ## Tool-policy principles AM applies
 
 When AM recommends a `permissionMode` and `allowedTools` / `deniedTools`, it follows these rules:
