@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.6.2 (2026-05-18)
+
+Patch release closing two long-standing gaps in IM-to-Agent routing: quoted images now actually reach the agent, and every inbound message is tagged with the sender so attribution-sensitive agents can identify who's talking.
+
+### Features
+
+- **Quoted image content reaches the agent end-to-end** (a8249a2, d0e59dd, 71a1559, c69f73d) — previously, when a user @-ed the bot in reply to an earlier screenshot, the agent only saw a "[图片]" textual placeholder; the actual bytes were dropped at the adapter layer. Now:
+  - `ChannelQuote` carries an optional `attachment` (path / url / mimeType / filename) and a new `mergeQuoteAttachment(msg)` core helper prepends it into `msg.attachments` so quoted media leads, current media follows.
+  - WeCom: `parseQuoteMessage` now extracts `quote.image.url + aeskey`, downloads + decrypts via the existing `downloadAndDecrypt`, and stores the local path in `quote.attachment`.
+  - Telegram: `reply_to_message.photo / voice / document` resolves through `getFile` and lands in `quote.attachment` as a URL.
+  - The `[图片]` placeholder upgrades to `[图片（见附件）]` when an attachment is materially present, hinting to the LLM that the binary is in the prompt rather than just referenced.
+  - 9 new core tests cover the formatter behaviour and merge logic (ordering, immutability, no-op fast paths).
+  - Voice / file quotes are scoped out for now — upgrade trigger is the first real ask for an agent to inspect quoted voice/file content.
+- **Agent Manager learns the `[from: ...]` convention** (ebf7bb8) — AM's system prompt and `docs/agent-manager.md` now document the inbound sender tag with a copy-paste-ready instruction snippet AM hands users during Capability A (interview), B (prompt review), and C (diagnose) when their Agent needs sender attribution.
+
+### Bug Fixes
+
+- **Inbound IM messages now carry sender identity across the session boundary** (#12, 05cde11) — `msg.identity.{peerId, peerDisplayName}` used to be dropped at the `sessionManager.sendMessage` call site, so downstream agents (arcs-sdk-collector's `reporter` field, the upcoming sz-task audit log) only saw `msg.text` and collapsed to anonymous defaults. Both inbound paths (peer-level `handleInbound` and account-bound `handleAccountBoundInbound`) now prepend `[from: <peerDisplayName || peerId>] ` to the text before calling `sendMessage`. Placement is after slash-command and mention dispatch, so `/exit`, `/goto`, and mention parsing remain untouched. Includes 2 new unit tests and 2 updated assertions.
+
+### Known follow-ups (not in this release)
+
+- WeCom userid → display-name reverse lookup (`wecom.ts:141`) — the `[from: ...]` tag currently falls back to `wxid_...` for WeCom; Telegram already carries real names.
+- Agent prompts that depend on the new tag (arcs-sdk-collector, sz-task) need to be synced separately to recognise the prefix as metadata.
+
 ## v0.6.1 (2026-05-13)
 
 Patch release on top of v0.6.0: quote-context handling for IM messages goes from "partially working for text-only" to "properly structured across all message kinds", and Codex CLI top-level errors no longer disappear silently.
