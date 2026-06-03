@@ -315,6 +315,34 @@ export function resolveToolApprovalAction(
   return { kind: 'prompt' };
 }
 
+/**
+ * Remap an AskUserQuestion answers map keyed by question *index* ("0", "1") —
+ * the shape OpenLobby's web/IM layers produce — to one keyed by question *text*.
+ *
+ * Claude Code 2.1.x feeds the answers straight back to the model verbatim
+ * (`"<key>"="<value>"`) and documents the keys as the question text, so passing
+ * index keys makes the model see meaningless `"0"="React"`. Keys that are not a
+ * valid in-range index are passed through unchanged (already question text, or
+ * no matching question).
+ */
+export function remapAnswersToQuestionText(
+  toolInput: Record<string, unknown>,
+  answers: Record<string, string>,
+): Record<string, string> {
+  const questions = Array.isArray(toolInput.questions)
+    ? (toolInput.questions as Array<{ question?: unknown }>)
+    : [];
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(answers)) {
+    const idx = Number(key);
+    const question = Number.isInteger(idx) && idx >= 0 ? questions[idx] : undefined;
+    const questionText =
+      question && typeof question.question === 'string' ? question.question : key;
+    out[questionText] = value;
+  }
+  return out;
+}
+
 /** Fallback commands shown before any session loads the real list from SDK */
 const FALLBACK_COMMANDS: AdapterCommand[] = [
   { name: '/compact', description: 'Compact conversation to save context', args: '[instructions]' },
@@ -780,7 +808,7 @@ class ClaudeCodeProcess extends EventEmitter implements AgentProcess {
       console.log('[ClaudeCode] Using pre-responded decision for:', requestId, preResponded.decision);
       if (preResponded.decision === 'allow') {
         const updatedInput = preResponded.payload?.answers
-          ? { ...toolInput, answers: preResponded.payload.answers }
+          ? { ...toolInput, answers: remapAnswersToQuestionText(toolInput, preResponded.payload.answers as Record<string, string>) }
           : toolInput;
         return Promise.resolve({ behavior: 'allow' as const, updatedInput, toolUseID });
       } else {
@@ -873,9 +901,10 @@ class ClaudeCodeProcess extends EventEmitter implements AgentProcess {
     this.pendingControls.delete(requestId);
 
     if (decision === 'allow') {
-      // If payload contains answers (from AskUserQuestion), inject into updatedInput
+      // If payload contains answers (from AskUserQuestion), remap the index-keyed
+      // answers to question-text keys (what Claude Code 2.1.x expects) and inject.
       const updatedInput = payload?.answers
-        ? { ...pending.toolInput, answers: payload.answers }
+        ? { ...pending.toolInput, answers: remapAnswersToQuestionText(pending.toolInput, payload.answers as Record<string, string>) }
         : pending.toolInput;
       pending.resolve({ behavior: 'allow', updatedInput });
     } else {
