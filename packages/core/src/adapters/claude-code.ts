@@ -15,6 +15,7 @@ import type {
   ControlDecision,
   AdapterCommand,
   AdapterPermissionMeta,
+  PermissionMode,
 } from '../types.js';
 import { detectInstalledBinary, findExecutable } from './command-utils.js';
 import { enforceToolPolicy } from './policy.js';
@@ -250,6 +251,69 @@ function sdkMessageToLobby(sessionId: string, msg: any): LobbyMessage[] {
 
 /** Read-only tools allowed in readonly mode */
 const READONLY_TOOLS = ['Read', 'Glob', 'Grep', 'Agent', 'WebSearch', 'WebFetch'];
+
+/** Structured question payload carried by the AskUserQuestion tool. */
+export interface AskUserQuestionData {
+  question: string;
+  header: string;
+  options: Array<{ label: string; description: string }>;
+  multiSelect: boolean;
+}
+
+/**
+ * Decision for how a tool-use should be handled before it runs:
+ *  - 'auto-allow' — approve immediately without user interaction
+ *  - 'deny'       — reject with a user-facing message
+ *  - 'prompt'     — surface a card and wait for the user; `questions` is set
+ *                   when the tool is AskUserQuestion
+ */
+export type ToolApprovalAction =
+  | { kind: 'auto-allow' }
+  | { kind: 'deny'; message: string }
+  | { kind: 'prompt'; questions?: AskUserQuestionData[] };
+
+/**
+ * Extract the structured questions payload when a tool-use is an
+ * AskUserQuestion call. Returns undefined for any other tool or when the
+ * payload is missing/malformed.
+ */
+export function extractAskUserQuestions(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+): AskUserQuestionData[] | undefined {
+  if (toolName !== 'AskUserQuestion' || !Array.isArray(toolInput.questions)) {
+    return undefined;
+  }
+  return toolInput.questions as AskUserQuestionData[];
+}
+
+/**
+ * Decide how a tool-use should be handled given the active permission mode.
+ *
+ * AskUserQuestion is an interactive *input* tool: there is no sensible
+ * auto-answer, so it ALWAYS prompts (surfaces the question card and waits),
+ * regardless of permission mode. This mirrors Claude Code itself, whose CLI
+ * routes AskUserQuestion through the permission callback even under
+ * bypassPermissions. Every other tool keeps the historical behavior: auto mode
+ * approves, readonly mode denies non-read-only tools, supervised mode prompts.
+ */
+export function resolveToolApprovalAction(
+  toolName: string,
+  toolInput: Record<string, unknown>,
+  mode: PermissionMode,
+): ToolApprovalAction {
+  const questions = extractAskUserQuestions(toolName, toolInput);
+  if (questions) {
+    return { kind: 'prompt', questions };
+  }
+  if (mode === 'auto') {
+    return { kind: 'auto-allow' };
+  }
+  if (mode === 'readonly' && !READONLY_TOOLS.includes(toolName)) {
+    return { kind: 'deny', message: 'Readonly mode: only read-only tools are allowed' };
+  }
+  return { kind: 'prompt' };
+}
 
 /** Fallback commands shown before any session loads the real list from SDK */
 const FALLBACK_COMMANDS: AdapterCommand[] = [
@@ -679,35 +743,27 @@ class ClaudeCodeProcess extends EventEmitter implements AgentProcess {
     }
 
     const mode = this.spawnOptions.permissionMode ?? 'supervised';
+    const action = resolveToolApprovalAction(toolName, toolInput, mode);
 
-    // Auto mode: approve everything immediately
-    if (mode === 'auto') {
+    // Auto-allowed tools (auto mode, non-interactive): approve immediately.
+    if (action.kind === 'auto-allow') {
       console.log('[ClaudeCode] Auto mode: approved tool', toolName);
       return Promise.resolve({ behavior: 'allow', updatedInput: toolInput, toolUseID });
     }
 
-    // Readonly mode: deny non-read-only tools
-    if (mode === 'readonly' && !READONLY_TOOLS.includes(toolName)) {
+    // Readonly mode: deny non-read-only tools.
+    if (action.kind === 'deny') {
       console.log('[ClaudeCode] Readonly mode: denied tool', toolName);
-      return Promise.resolve({
-        behavior: 'deny',
-        message: 'Readonly mode: only read-only tools are allowed',
-        toolUseID,
-      });
+      return Promise.resolve({ behavior: 'deny', message: action.message, toolUseID });
     }
 
-    // Supervised mode: emit control message and wait for user approval
+    // 'prompt': emit control message and wait for user approval. AskUserQuestion
+    // always reaches this branch (even in auto/readonly mode) so the question
+    // card is surfaced instead of being silently auto-answered.
     const requestId = randomUUID();
     console.log('[ClaudeCode] Tool approval requested:', toolName, 'toolUseID:', toolUseID);
 
-    const questions = toolName === 'AskUserQuestion' && Array.isArray(toolInput.questions)
-      ? (toolInput.questions as Array<{
-          question: string;
-          header: string;
-          options: Array<{ label: string; description: string }>;
-          multiSelect: boolean;
-        }>)
-      : undefined;
+    const questions = action.questions;
 
     const controlMsg = makeLobbyMessage(this.sessionId, 'control', {
       requestId,
