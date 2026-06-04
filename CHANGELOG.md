@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.6.3 (2026-06-04)
+
+Patch release fixing `AskUserQuestion` under Claude Code 2.1.x. After upgrading to the new native CLI, the more proactive Opus model calls `AskUserQuestion` constantly — and OpenLobby silently swallowed it: in `auto` mode no question card ever appeared, and even when one did the user's answers never reached the model.
+
+### Bug Fixes
+
+- **`AskUserQuestion` now always surfaces its question card, in every permission mode** (7628f22) — `handleToolApproval` short-circuited with an immediate `allow` in `auto` mode (and a `deny` in `readonly`) *before* emitting the control message, so the model's `AskUserQuestion` call was auto-approved with empty answers and the card never popped ("卡片没弹出来"). `AskUserQuestion` is an interactive input tool with no sensible auto-answer, so it is now exempt from the auto/readonly short-circuit and always prompts — matching Claude Code's own CLI, which routes it through the permission callback even under `bypassPermissions` (verified by live reproduction against 2.1.154). The decision is extracted into a pure, unit-tested `resolveToolApprovalAction()`; `auto` now only auto-approves non-interactive tools.
+- **`AskUserQuestion` answers are keyed by question text so they reach the model** (80dde8d) — Claude Code 2.1.x feeds the answers map back to the model verbatim (`"<key>"="<value>"`) and matches keys against the question *text*; OpenLobby's web/IM layers produce index keys (`"0"`, `"1"`), which match nothing and get dropped, so the model saw `...answered: .` (empty). A new pure `remapAnswersToQuestionText()` remaps index → question text at both answer-injection points. Verified end-to-end against claude 2.1.154 (index keys → empty result; remapped → correct answer reaches the model). 13 new unit tests.
+- **Codex CLI no longer leaks the OpenLobby MCP server into every Codex process** (#13, d85a60c) — Codex sessions previously inherited the OpenLobby meta MCP server in every process; see PR #13.
+
 ## v0.6.2 (2026-05-18)
 
 Patch release closing two long-standing gaps in IM-to-Agent routing: quoted images now actually reach the agent, and every inbound message is tagged with the sender so attribution-sensitive agents can identify who's talking.
