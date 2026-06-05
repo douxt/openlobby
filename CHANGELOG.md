@@ -2,7 +2,11 @@
 
 ## v0.6.3 (2026-06-04)
 
-Patch release fixing `AskUserQuestion` under Claude Code 2.1.x. After upgrading to the new native CLI, the more proactive Opus model calls `AskUserQuestion` constantly — and OpenLobby silently swallowed it: in `auto` mode no question card ever appeared, and even when one did the user's answers never reached the model.
+Two things: fixes `AskUserQuestion` under Claude Code 2.1.x (after upgrading to the new native CLI, the more proactive Opus model calls it constantly and OpenLobby silently swallowed it — in `auto` mode no question card appeared, and even when one did the user's answers never reached the model); and upgrades the **Agent Manager** so it can author an agent's runtime tool scripts — with tests and validation — while building the agent.
+
+### Features
+
+- **Agent Manager can author, test & register an agent's tool scripts** (25f8649, 9a042c4, bc6d659) — during the build-an-agent interview (Capability A), AM now scaffolds the runtime tool scripts an agent needs into its workspace, writes their tests, and **runs the tests to green** (self-healing up to 3 rounds) before the agent goes live. It then registers them: a structured `scripts[]` field on `AgentDefinition`, a "Scripts available to you" section appended to the agent's `systemPrompt`, and `Bash` added to its `allowedTools` so the running agent can actually invoke them. To do this AM gains native `Write/Edit/Bash` (auto mode, scoped to the target agent's workspace); `agent_get` now returns the agent's absolute `workspacePath` and `agent_update` accepts `scripts[]`. Backward-compatible (existing agents default to no scripts).
 
 ### Bug Fixes
 
