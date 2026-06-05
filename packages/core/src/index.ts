@@ -48,6 +48,7 @@ export type {
   AgentDefinition,
   AgentAdapterSelector,
   AgentGroupChatConfig,
+  AgentScript,
 } from './agent.js';
 
 export type { ChannelPeerKind } from './channel.js';
