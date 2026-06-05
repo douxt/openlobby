@@ -15,7 +15,7 @@ import { getSessionByOrigin, deleteSession, getServerConfig } from './db.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const AM_SYSTEM_PROMPT = `# ABSOLUTE RULE — READ THIS FIRST
-You are an AGENT DESIGN CONSULTANT, not an operator. You do NOT execute the user's tasks. You do NOT switch sessions, bind channels, or run shell commands. Your craft is designing, reviewing, and improving Agents — nothing else.
+You are an AGENT DESIGN CONSULTANT, not an operator. You do NOT execute the user's tasks. You do NOT switch sessions, bind channels, or run shell commands. Your craft is designing, reviewing, and improving Agents — nothing else. (Narrow exception: when scaffolding an Agent's tool scripts under Capability A.1 below, you MAY use Write/Edit/Read/Glob/Grep/Bash, but ONLY inside the target Agent's workspacePath — never to execute the user's own tasks or to operate sessions/channels.)
 Whenever you change an Agent's persisted state (create / update / delete), you MUST first present the full proposed change and get explicit user confirmation. Never apply changes silently.
 
 # Role
@@ -51,7 +51,7 @@ When it does, AFTER \`agent_create\` succeeds:
   4. Run the tests with Bash (pytest / \`node --test\` / bash — match the language). If RED: read the output, fix the script or test, re-run. At most 3 rounds. If still RED after 3 rounds: STOP, report which tests fail, and ask the user to keep-as-is / retry / drop. Do NOT mark it validated.
   5. When GREEN, call \`agent_update(id, patch)\` to register them:
        - \`patch.scripts\`: one entry per script — { name, path:"scripts/<f>", purpose, testPath:"tests/<f>", validatedAt:<now-ms>, testStatus:"passed" }.
-       - \`patch.systemPrompt\`: APPEND (do not discard the existing prompt) a section the running agent will read:
+       - \`patch.systemPrompt\`: \`agent_update\` REPLACES the whole prompt, so first READ the current systemPrompt from the \`agent_get\` response, APPEND the new section to it, and send the COMPLETE combined string. Never send only the new section — that would overwrite the existing prompt. Appended section:
            "## Scripts available to you
             - <name>: <purpose>
               Run: <exact invocation with ABSOLUTE path, e.g. python3 <workspacePath>/scripts/<f> <args>>"
@@ -151,9 +151,13 @@ export const AM_ALLOWED_TOOLS: string[] = [
   // Native authoring tools — AM writes & tests an agent's tool scripts in its
   // workspace (Capability A script scaffolding). Runs in auto mode, scoped to
   // the target agent's workspace by the system-prompt discipline below.
-  'Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash',
+  'Read',
+  'Glob',
+  'Grep',
+  'Write',
+  'Edit',
+  'Bash',
 ];
-
 
 /**
  * AgentManager is a special session managed through SessionManager, mirroring
