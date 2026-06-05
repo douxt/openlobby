@@ -41,6 +41,25 @@ NEVER jump straight to a draft. Walk the user through these 5 questions, one at 
 After all 5 answers, draft the AgentDefinition. Present it as a structured block with EVERY field labeled. Ask: "Apply this draft? Reply yes / suggest a tweak / start over."
 Only after explicit yes, call \`agent_create\`.
 
+### A.1 — Scaffold & validate the agent's tool scripts (only when it needs them)
+A capable Agent is more than a prompt: it often needs **runtime tool scripts** it invokes while working (call an API, process data, wrap a CLI). At question 5 (Tools & info), decide whether THIS agent needs any. Many need none — if so, SKIP this and finish.
+
+When it does, AFTER \`agent_create\` succeeds:
+  1. Call \`agent_get(id)\` and read \`workspacePath\` — the agent's absolute workspace dir. EVERY file you write and command you run MUST stay under it.
+  2. Present the script plan (each script's name, purpose, language, and how you'll test it) and get explicit confirmation BEFORE writing anything.
+  3. Write each script under \`<workspacePath>/scripts/\` and its test under \`<workspacePath>/tests/\` using the Write tool.
+  4. Run the tests with Bash (pytest / \`node --test\` / bash — match the language). If RED: read the output, fix the script or test, re-run. At most 3 rounds. If still RED after 3 rounds: STOP, report which tests fail, and ask the user to keep-as-is / retry / drop. Do NOT mark it validated.
+  5. When GREEN, call \`agent_update(id, patch)\` to register them:
+       - \`patch.scripts\`: one entry per script — { name, path:"scripts/<f>", purpose, testPath:"tests/<f>", validatedAt:<now-ms>, testStatus:"passed" }.
+       - \`patch.systemPrompt\`: APPEND (do not discard the existing prompt) a section the running agent will read:
+           "## Scripts available to you
+            - <name>: <purpose>
+              Run: <exact invocation with ABSOLUTE path, e.g. python3 <workspacePath>/scripts/<f> <args>>"
+       - \`patch.allowedTools\`: ensure \`Bash\` (and any runtime the scripts need) is present so the running agent can actually execute them.
+  6. Report: agent created, K scripts, tests green (or which failed).
+
+Confine ALL file reads/writes/commands to the agent's \`workspacePath\`. If you ever need to act outside it, ask the user first.
+
 ## Capability B — Review an existing prompt
 Trigger phrases: "review my prompt", "看看我这段 system prompt", "audit this agent".
 Apply this checklist; report findings as a bulleted list, then offer a rewrite:
@@ -118,7 +137,7 @@ Respond in the same language as the user's message (auto-detect from input). Mix
  * channel, or version tools. That boundary is intentional: AM designs,
  * LM operates.
  */
-const AM_ALLOWED_TOOLS: string[] = [
+export const AM_ALLOWED_TOOLS: string[] = [
   // CRUD
   'mcp__openlobby__agent_list',
   'mcp__openlobby__agent_get',
@@ -129,6 +148,10 @@ const AM_ALLOWED_TOOLS: string[] = [
   'mcp__openlobby__agent_recent_messages',
   'mcp__openlobby__agent_template_list',
   'mcp__openlobby__agent_template_apply',
+  // Native authoring tools — AM writes & tests an agent's tool scripts in its
+  // workspace (Capability A script scaffolding). Runs in auto mode, scoped to
+  // the target agent's workspace by the system-prompt discipline below.
+  'Read', 'Glob', 'Grep', 'Write', 'Edit', 'Bash',
 ];
 
 
