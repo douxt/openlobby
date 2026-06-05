@@ -2,7 +2,7 @@ import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type Database from 'better-sqlite3';
-import type { AgentDefinition, AgentGroupChatConfig } from '@openlobby/core';
+import type { AgentDefinition, AgentGroupChatConfig, AgentScript } from '@openlobby/core';
 import {
   upsertAgentDefinition,
   getAgentDefinition,
@@ -52,6 +52,7 @@ function rowToDef(row: AgentDefinitionRow): AgentDefinition {
     groupChat: row.group_chat_json
       ? (JSON.parse(row.group_chat_json) as AgentGroupChatConfig)
       : undefined,
+    scripts: JSON.parse(row.agent_scripts_json) as AgentScript[],
     deletedAt: row.deleted_at ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -71,6 +72,7 @@ function defToRow(def: AgentDefinition): AgentDefinitionRow {
     allowed_tools_json: def.allowedTools ? JSON.stringify(def.allowedTools) : null,
     denied_tools_json: def.deniedTools ? JSON.stringify(def.deniedTools) : null,
     group_chat_json: def.groupChat ? JSON.stringify(def.groupChat) : null,
+    agent_scripts_json: JSON.stringify(def.scripts ?? []),
     deleted_at: def.deletedAt ?? null,
     created_at: def.createdAt,
     updated_at: def.updatedAt,

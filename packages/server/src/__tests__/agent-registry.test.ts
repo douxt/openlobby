@@ -70,4 +70,56 @@ describe('AgentRegistry', () => {
     expect(prompt).toContain('Inline prompt');
     expect(prompt).toContain('I am a bot.');
   });
+
+  it('round-trips scripts[] through create / get / update', () => {
+    const created = registry.create({
+      id: 'tooler',
+      displayName: 'Tooler',
+      description: '',
+      adapter: 'claude-code',
+      contextFiles: [],
+      systemPrompt: 'x',
+      scripts: [
+        {
+          name: 'greet',
+          path: 'scripts/greet.py',
+          purpose: 'greet a city',
+          testPath: 'tests/test_greet.py',
+          validatedAt: 123,
+          testStatus: 'passed',
+        },
+      ],
+    });
+    expect(created.scripts).toHaveLength(1);
+    expect(registry.get('tooler')!.scripts).toEqual([
+      {
+        name: 'greet',
+        path: 'scripts/greet.py',
+        purpose: 'greet a city',
+        testPath: 'tests/test_greet.py',
+        validatedAt: 123,
+        testStatus: 'passed',
+      },
+    ]);
+
+    // create without scripts → empty array after a DB round-trip (mirrors
+    // contextFiles). NB: create() returns the in-memory input, so read it back
+    // via get() to assert the persisted/normalized value.
+    registry.create({
+      id: 'bare',
+      displayName: 'Bare',
+      description: '',
+      adapter: 'any',
+      contextFiles: [],
+      systemPrompt: 'x',
+    });
+    expect(registry.get('bare')!.scripts).toEqual([]);
+
+    // update adds scripts
+    const updated = registry.update('bare', {
+      scripts: [{ name: 'a', path: 'scripts/a.sh', purpose: 'p' }],
+    });
+    expect(updated.scripts).toEqual([{ name: 'a', path: 'scripts/a.sh', purpose: 'p' }]);
+    expect(registry.get('bare')!.scripts![0].name).toBe('a');
+  });
 });

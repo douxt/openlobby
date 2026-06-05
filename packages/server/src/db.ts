@@ -145,11 +145,19 @@ export function initDb(dbPath?: string): Database.Database {
       allowed_tools_json  TEXT,
       denied_tools_json   TEXT,
       group_chat_json     TEXT,
+      agent_scripts_json  TEXT NOT NULL DEFAULT '[]',
       deleted_at          INTEGER,
       created_at          INTEGER NOT NULL,
       updated_at          INTEGER NOT NULL
     )
   `);
+
+  // Migration: add agent_scripts_json column if not exists
+  try {
+    db.exec(`ALTER TABLE agent_definitions ADD COLUMN agent_scripts_json TEXT NOT NULL DEFAULT '[]'`);
+  } catch {
+    // Column already exists — ignore
+  }
 
   // Migration: add agent_id column to sessions
   try {
@@ -545,6 +553,7 @@ export interface AgentDefinitionRow {
   allowed_tools_json: string | null;
   denied_tools_json: string | null;
   group_chat_json: string | null;
+  agent_scripts_json: string;
   deleted_at: number | null;
   created_at: number;
   updated_at: number;
@@ -553,9 +562,9 @@ export interface AgentDefinitionRow {
 export function upsertAgentDefinition(db: Database.Database, row: AgentDefinitionRow): void {
   db.prepare(`
     INSERT OR REPLACE INTO agent_definitions
-      (id, display_name, description, adapter, system_prompt, context_files_json, model, permission_mode, allowed_tools_json, denied_tools_json, group_chat_json, deleted_at, created_at, updated_at)
+      (id, display_name, description, adapter, system_prompt, context_files_json, model, permission_mode, allowed_tools_json, denied_tools_json, group_chat_json, agent_scripts_json, deleted_at, created_at, updated_at)
     VALUES
-      (@id, @display_name, @description, @adapter, @system_prompt, @context_files_json, @model, @permission_mode, @allowed_tools_json, @denied_tools_json, @group_chat_json, @deleted_at, @created_at, @updated_at)
+      (@id, @display_name, @description, @adapter, @system_prompt, @context_files_json, @model, @permission_mode, @allowed_tools_json, @denied_tools_json, @group_chat_json, @agent_scripts_json, @deleted_at, @created_at, @updated_at)
   `).run(row);
 }
 
