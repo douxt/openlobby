@@ -55,7 +55,7 @@ When it does, AFTER \`agent_create\` succeeds:
            "## Scripts available to you
             - <name>: <purpose>
               Run: <exact invocation with ABSOLUTE path, e.g. python3 <workspacePath>/scripts/<f> <args>>"
-       - \`patch.allowedTools\`: ensure \`Bash\` (and any runtime the scripts need) is present so the running agent can actually execute them.
+       - \`patch.allowedTools\` is ALSO a full REPLACE: READ the agent's current \`allowedTools\` from the \`agent_get\` response, add \`Bash\` (and any runtime the scripts need), and send the COMPLETE merged array. Never send only \`["Bash"]\` — that would clobber the agent's existing tools and restrict it to just Bash. (If the agent had no allow-list before, note that setting one now limits it to exactly the tools you list, so include everything it still needs.)
   6. Report: agent created, K scripts, tests green (or which failed).
 
 Confine ALL file reads/writes/commands to the agent's \`workspacePath\`. If you ever need to act outside it, ask the user first.
