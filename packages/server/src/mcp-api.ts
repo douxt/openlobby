@@ -59,6 +59,15 @@ const AgentCreateBody = z.object({
     .optional(),
 });
 
+const AgentScriptSchema = z.object({
+  name: z.string(),
+  path: z.string(),
+  purpose: z.string(),
+  testPath: z.string().optional(),
+  validatedAt: z.number().optional(),
+  testStatus: z.enum(['passed', 'failed', 'untested']).optional(),
+});
+
 const AgentPatchSchema = z.object({
   displayName: z.string().min(1).optional(),
   description: z.string().optional(),
@@ -75,6 +84,7 @@ const AgentPatchSchema = z.object({
       requireMention: z.boolean(),
     })
     .optional(),
+  scripts: z.array(AgentScriptSchema).optional(),
 });
 
 const AgentTemplateApplyBody = z.object({
@@ -517,9 +527,10 @@ function registerAgentRoutes(
     async (request, reply) => {
       const registry = requireRegistry(reply);
       if (!registry) return;
-      const def = registry.get(decodeURIComponent(request.params.id));
+      const id = decodeURIComponent(request.params.id);
+      const def = registry.get(id);
       if (!def) return reply.status(404).send({ error: 'Agent not found' });
-      return def;
+      return { ...def, workspacePath: registry.getAgentWorkspaceDir(id) };
     },
   );
 

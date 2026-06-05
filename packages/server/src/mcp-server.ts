@@ -385,7 +385,7 @@ async function main() {
   // --- Tool: agent_get ---
   server.tool(
     'agent_get',
-    'Fetch a single Agent definition by id (returns null if not found)',
+    'Fetch a single Agent definition by id (returns null if not found). The response also includes `workspacePath`: the absolute directory where you write/read this agent\'s scripts.',
     {
       id: z.string().describe('Agent id'),
     },
@@ -436,6 +436,19 @@ async function main() {
           allowedTools: z.array(z.string()).optional(),
           deniedTools: z.array(z.string()).optional(),
           groupChat: AGENT_GROUP_CHAT,
+          scripts: z
+            .array(
+              z.object({
+                name: z.string(),
+                path: z.string(),
+                purpose: z.string(),
+                testPath: z.string().optional(),
+                validatedAt: z.number().optional(),
+                testStatus: z.enum(['passed', 'failed', 'untested']).optional(),
+              }),
+            )
+            .optional()
+            .describe('Authored tool scripts to register on the agent'),
         })
         .describe('Partial AgentDefinition; only supplied fields are applied'),
     },

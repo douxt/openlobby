@@ -253,6 +253,40 @@ describe('mcp-api agent routes', () => {
     expect(registry.get('doomed')).toBeNull();
   });
 
+  // ─── workspacePath & scripts ───────────────────────────────────────
+
+  it('agent_get returns the absolute workspacePath', async () => {
+    registry.create({
+      id: 'ws', displayName: 'WS', description: '', adapter: 'any',
+      contextFiles: [], systemPrompt: 'x',
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/agents/ws' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { workspacePath?: string };
+    expect(body.workspacePath).toBe(registry.getAgentWorkspaceDir('ws'));
+  });
+
+  it('agent_update accepts and persists scripts[]', async () => {
+    registry.create({
+      id: 'sc', displayName: 'SC', description: '', adapter: 'any',
+      contextFiles: [], systemPrompt: 'x',
+    });
+    const patchRes = await app.inject({
+      method: 'PATCH',
+      url: '/api/agents/sc',
+      payload: {
+        scripts: [
+          { name: 'g', path: 'scripts/g.py', purpose: 'p', testPath: 'tests/t.py', validatedAt: 1, testStatus: 'passed' },
+        ],
+      },
+    });
+    expect(patchRes.statusCode).toBe(200);
+    const getRes = await app.inject({ method: 'GET', url: '/api/agents/sc' });
+    const body = getRes.json() as { scripts?: Array<{ name: string }> };
+    expect(body.scripts).toHaveLength(1);
+    expect(body.scripts![0].name).toBe('g');
+  });
+
   // ─── agent_template_list ───────────────────────────────────────────
 
   it('agent_template_list returns templates with fillIn metadata', async () => {
