@@ -60,6 +60,10 @@ export const zhCNMessages = {
   'sidebar.statusStopped': '已停止',
   'sidebar.statusError': '错误',
 
+  'nav.sessions': '会话',
+  'nav.agents': '代理',
+  'nav.channels': '频道',
+
   'roomHeader.auto': '自动',
   'roomHeader.supervised': '监督',
   'roomHeader.readonly': '只读',

@@ -62,6 +62,10 @@ export interface Messages {
   'sidebar.statusStopped': string;
   'sidebar.statusError': string;
 
+  'nav.sessions': string;
+  'nav.agents': string;
+  'nav.channels': string;
+
   'roomHeader.auto': string;
   'roomHeader.supervised': string;
   'roomHeader.readonly': string;
