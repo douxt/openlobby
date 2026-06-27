@@ -192,3 +192,57 @@
 .markdown-body pre {
   margin: 0.5em 0;
 }
+
+/* Mobile adaptation: begin */
+
+/* Safe-area bottom inset utility */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Dynamic viewport height fallback */
+.h-dvh-fallback {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* WCAG 2.5.5 target size (44px minimum) */
+.tap-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Bottom navigation bar height */
+:root {
+  --mobile-nav-height: 56px;
+}
+
+/* Drawer backdrop animation */
+.drawer-backdrop {
+  opacity: 0;
+  transition: opacity 200ms ease, background-color 200ms ease;
+}
+
+.drawer-backdrop.open {
+  opacity: 1;
+}
+
+/* Drawer panel slide-in animation */
+.drawer-panel {
+  transform: translateX(100%);
+  transition: transform 200ms ease, background-color 200ms ease;
+}
+
+.drawer-panel.open {
+  transform: translateX(0);
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .drawer-backdrop,
+  .drawer-panel {
+    transition: none;
+  }
+}
+
+/* Mobile adaptation: end */
