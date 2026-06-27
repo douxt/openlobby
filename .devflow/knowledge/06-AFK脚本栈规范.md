@@ -169,6 +169,10 @@ implement → validate → auto-review → cross-review → merge-reviews → cr
 □ git push --set-upstream 已执行
 □ issues/ 仅含 issue 文件，无 PRD
 □ 所有 issue 的 effort 字段与 estimate 对齐
+□ dispatch.sh blocked_by 解析与 reconcile.sh 一致（都含引号剥离）
+□ 禁止手动 bash dispatch.sh，仅用 systemd timer
+□ git stash guard 已加入 dispatch.sh（防本地脏工作树阻塞 pull）
+```
 □ dispatch.timer 已激活（systemctl is-active）
 □ 手动 dispatch 仅用 systemctl start，禁止直接 bash dispatch.sh
 ```
