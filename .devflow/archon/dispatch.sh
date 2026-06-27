@@ -98,7 +98,16 @@ START_TIME=$(date +%s)
 ATTEMPT=1
 while [ $ATTEMPT -le $MAX_RETRIES ]; do
     log "ARCHON: 尝试 #${ATTEMPT}/${MAX_RETRIES}"
-    if archon workflow run "$ARCHON_WORKFLOW" "$ISSUE_PATH" >> "$LOG_FILE" 2>&1; then
+    # 用临时文件捕获 Archon 输出，提取结构化标记
+    ARCHON_OUT=$(mktemp)
+    trap "rm -f $ARCHON_OUT" EXIT
+    if archon workflow run "$ARCHON_WORKFLOW" "$ISSUE_PATH" > "$ARCHON_OUT" 2>&1; then
+        # 追加完整输出到主日志
+        cat "$ARCHON_OUT" >> "$LOG_FILE"
+        # 提取关键节点标记
+        grep -E "##\[(AC_DONE|AC_EXISTS|AC_FAIL|IMPLEMENT_RESULT|AC_VERIFY_RESULT|HARD_GATE)\]" "$ARCHON_OUT" 2>/dev/null | while IFS= read -r marker; do
+            log "ARCHON_NODE: $marker"
+        done || true
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - START_TIME))
 
@@ -122,9 +131,16 @@ sys.stdout.write(json.dumps(payload))
 " | python3 "$SCRIPTS_DIR/notify.py" approve-request 2>/dev/null || log "WARN: notify 失败"
 
         archon isolation cleanup --merged 2>/dev/null || true
+        rm -f "$ARCHON_OUT"
         log "IN_REVIEW: #${ISSUE_NUM} ${ISSUE_SLUG} (耗时 ${DURATION}s)"
         exit 0
     fi
+    # 失败：也捕获标记
+    cat "$ARCHON_OUT" >> "$LOG_FILE" 2>/dev/null || true
+    grep -E "##\[(AC_DONE|AC_EXISTS|AC_FAIL|IMPLEMENT_RESULT|AC_VERIFY_RESULT|HARD_GATE)\]" "$ARCHON_OUT" 2>/dev/null | while IFS= read -r marker; do
+        log "ARCHON_NODE: $marker"
+    done || true
+    rm -f "$ARCHON_OUT"
     ATTEMPT=$((ATTEMPT + 1))
     sleep 10
 done
