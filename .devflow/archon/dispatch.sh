@@ -32,8 +32,10 @@ BRANCH_PREFIX=$(grep -E '^\s+branch_prefix:' "$CONFIG" | head -1 | awk '{print $
 
 log "--- dispatch 扫描: $PROJECT_NAME ---"
 
-# 同步远端
+# 同步远端（先 stash 本地改动，避免 rebase 拒绝）
+git stash --quiet 2>/dev/null || true
 git pull --rebase --quiet 2>/dev/null || log "WARN: git pull 失败"
+git stash pop --quiet 2>/dev/null || true
 
 # 扫描第一个无依赖阻塞的 ready AFK issue
 BEST_ISSUE=""
