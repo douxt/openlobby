@@ -42,7 +42,7 @@ while IFS= read -r f; do
     TYPE=$(grep "^type:" "$f" | awk '{print $2}' || true)
     [ "$TYPE" != "AFK" ] && continue
     # 检查 blocked_by 是否全部 done
-    BLOCKED_BY=$(grep "^blocked_by:" "$f" | grep -oP '\[.*?\]' | tr -d '[]' | tr ',' '\n' | sed 's/^ *//;s/ *$//' | grep -v "^$" || true)
+    BLOCKED_BY=$(grep "^blocked_by:" "$f" | grep -oP '\[.*?\]' | tr -d '[]' | tr ',' '\n' | sed 's/^ *"//;s/" *$//;s/^ *//;s/ *$//' | grep -v "^$" || true)
     DEPS_OK=true
     for dep in $BLOCKED_BY; do
         [ -z "$dep" ] && continue
