@@ -130,6 +130,18 @@ interface LobbyState {
   accountBindings: ChannelAccountBindingData[];
   accountBindingConflict: AccountBindingConflictData | null;
 
+  // Mobile UI state
+  drawerOpen: boolean;
+  setDrawerOpen: (open: boolean) => void;
+  showAgentsPanel: boolean;
+  setShowAgentsPanel: (show: boolean) => void;
+  showChannelPanel: boolean;
+  setShowChannelPanel: (show: boolean) => void;
+  showSettingsDialog: boolean;
+  setShowSettingsDialog: (show: boolean) => void;
+  showUpdateDialog: boolean;
+  setShowUpdateDialog: (show: boolean) => void;
+
   // Agent state
   agents: AgentDefinition[];
   deletedAgents: AgentDefinition[];
@@ -244,6 +256,18 @@ export const useLobbyStore = create<LobbyState>((set) => ({
   channelBindings: [],
   accountBindings: [],
   accountBindingConflict: null,
+
+  // Mobile UI state defaults
+  drawerOpen: false,
+  setDrawerOpen: (open) => set({ drawerOpen: open }),
+  showAgentsPanel: false,
+  setShowAgentsPanel: (show) => set({ showAgentsPanel: show }),
+  showChannelPanel: false,
+  setShowChannelPanel: (show) => set({ showChannelPanel: show }),
+  showSettingsDialog: false,
+  setShowSettingsDialog: (show) => set({ showSettingsDialog: show }),
+  showUpdateDialog: false,
+  setShowUpdateDialog: (show) => set({ showUpdateDialog: show }),
 
   agents: [],
   deletedAgents: [],
