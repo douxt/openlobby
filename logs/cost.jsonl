@@ -1,0 +1,8 @@
+{"timestamp": "2026-06-27T16:30:41.717037", "issue": "001-css-i18n-store-foundation", "status": "failed", "duration_sec": 37, "workflow": "auto-execute-afk", "model": "deepseek-v4-pro"}
+{"timestamp": "2026-06-27T17:01:34.792189", "issue": "001-css-i18n-store-foundation", "status": "in_review", "duration_sec": 60, "workflow": "auto-execute-afk", "model": "deepseek-v4-pro"}
+{"timestamp": "2026-06-27T17:36:38.185031", "issue": "001-css-i18n-store-foundation", "status": "in_review", "duration_sec": 61, "workflow": "auto-execute-afk", "model": "deepseek-v4-pro"}
+{"timestamp": "2026-06-27T19:56:34.620707", "issue": "001-css-i18n-store-foundation", "status": "in_review", "duration_sec": 62, "workflow": "auto-execute-afk", "model": "deepseek-v4-pro"}
+{"timestamp": "2026-06-27T22:11:26.429653", "issue": "003-sidebar-adaptation", "status": "in_review", "duration_sec": 63, "workflow": "auto-execute-afk", "model": "deepseek-v4-pro"}
+{"timestamp": "2026-06-27T22:21:51.570415", "issue": "002-mobile-drawer-nav", "status": "in_review", "duration_sec": 61, "workflow": "auto-execute-afk", "model": "deepseek-v4-pro"}
+{"timestamp": "2026-06-27T22:31:34.857315", "issue": "002-mobile-drawer-nav", "status": "in_review", "duration_sec": 65, "workflow": "auto-execute-afk", "model": "deepseek-v4-pro"}
+{"timestamp": "2026-06-27T23:09:24.601386", "issue": "002-mobile-drawer-nav", "status": "in_review", "duration_sec": 521, "workflow": "auto-execute-afk", "model": "deepseek-v4-pro"}
