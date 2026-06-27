@@ -317,13 +317,36 @@ derive_gates() {
 
 ## 实现优先级
 
-| 优先级 | 层 | 工作量 | 解决问题 |
-|:---:|:---|:---:|------|
-| **P0** | 第 4 层 checkpoints | ~60行 Python | #001 死循环 |
-| **P0** | 第 1 层 dispatch.sh 日志 | ~10行 bash | 盲调 |
-| **P1** | 第 5 层 hard-gate | ~30行 bash | 假通过 |
-| **P1** | 第 2 层 status.sh | ~80行 bash | 手动巡检 |
-| **P2** | 第 3 层 workflow 标记 | ~40行 YAML | 结构化判定 |
+| 优先级 | 层 | 工作量 | 解决问题 | 状态 |
+|:---:|:---|:---:|------|:---:|
+| **P0** | 第 1 层 dispatch.sh 日志 | ~10行 bash | 盲调 | ✅ 已实现 f3a18a4 |
+| **P0** | 第 2 层 status.sh | ~80行 bash | 手动巡检 | ✅ 已实现 f3a18a4 |
+| **P1** | 第 4 层 checkpoints | ~60行 Python | #001 死循环 | ⬜ 通过手动补完绕过 |
+| **P1** | 第 5 层 hard-gate | ~30行 bash | 假通过 | ⬜ |
+| **P2** | 第 3 层 workflow 标记 | ~40行 YAML | 结构化判定 | ⬜ |
+
+## 旁路部署方案
+
+用于同时测试原版（main）与移动版（feat/mobile-adaptation）：
+
+```bash
+# 原版
+git worktree add ../openlobby-main main
+cd ../openlobby-main && pnpm install
+PORT=3001 pnpm --filter @openlobby/server dev &
+pnpm --filter @openlobby/web dev -- --port 3000 &
+
+# 移动版
+PORT=4001 pnpm --filter @openlobby/server dev &
+pnpm --filter @openlobby/web dev -- --port 4000 &
+```
+
+```
+原版:   http://localhost:3000  ←→ 后端 :3001
+移动版: http://localhost:4000  ←→ 后端 :4001
+```
+
+两个浏览器 tab 并排对比。共享 `~/.openlobby/sessions.db`，session 数据不冲突。
 
 ---
 
