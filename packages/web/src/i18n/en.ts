@@ -60,6 +60,10 @@ export const enMessages = {
   'sidebar.statusStopped': 'Stopped',
   'sidebar.statusError': 'Error',
 
+  'nav.sessions': 'Sessions',
+  'nav.agents': 'Agents',
+  'nav.channels': 'Channels',
+
   'roomHeader.auto': 'Auto',
   'roomHeader.supervised': 'Supervised',
   'roomHeader.readonly': 'Readonly',
