@@ -1,0 +1,24 @@
+# .devflow/config.yaml — 由 ai-dev-flow-server install.sh 生成
+project:
+  name: openlobby
+  repo_url: git@github.com:douxt/openlobby.git
+  workspace: /home/www/openlobby
+
+tech_stack:
+  language: node
+  package_manager: npm
+  test_command: npm test
+  lint_command: npm run lint
+
+dispatch:
+  branch_prefix: ai/
+  max_retries: 3
+  poll_interval_min: 5
+
+review:
+  cross_review: false
+  constitution_check: true
+
+notify:
+  telegram_chat_id: "5088399602"
+  telegram_bot_token: "8664047075:AAFzMlQ9Ab5liRBaKOZFWo1HrfbmNzADZec"

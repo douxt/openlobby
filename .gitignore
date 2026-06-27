@@ -11,3 +11,4 @@ packages/cli/README.md
 .openlobby-cache/
 .bg-shell/
 .gsd/
+logs/*.log
