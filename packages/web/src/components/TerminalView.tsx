@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -29,6 +29,9 @@ function getTerminalTheme(): { background: string; foreground: string; cursor: s
 
 export default function TerminalView({ sessionId }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const lastCommandRef = useRef('');
+  const inputBufferRef = useRef('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -69,6 +72,16 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
 
     const inputDisposable = terminal.onData((data) => {
       wsPtyInput(sessionId, data);
+      // Track user input for clipboard copy
+      if (data === '\r') {
+        const cmd = inputBufferRef.current.trim();
+        if (cmd) lastCommandRef.current = cmd;
+        inputBufferRef.current = '';
+      } else if (data === '\x7f') {
+        inputBufferRef.current = inputBufferRef.current.slice(0, -1);
+      } else if (data.length === 1 && data >= ' ') {
+        inputBufferRef.current += data;
+      }
     });
 
     const store = useLobbyStore.getState();
@@ -101,11 +114,31 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
     };
   }, [sessionId]);
 
+  const handleCopyLastCommand = useCallback(async () => {
+    const cmd = lastCommandRef.current;
+    if (!cmd) return;
+    try {
+      await navigator.clipboard.writeText(cmd);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API unavailable
+    }
+  }, []);
+
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
-      style={{ minHeight: 0 }}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
+        style={{ minHeight: 0 }}
+      />
+      <button
+        onClick={handleCopyLastCommand}
+        className="md:hidden fixed bottom-[calc(var(--mobile-nav-height)+env(safe-area-inset-bottom,0px)+8px)] right-2 z-30 px-3 py-1.5 rounded text-xs bg-surface-elevated border border-outline text-on-surface-secondary hover:text-on-surface transition-colors"
+      >
+        {copied ? 'Copied!' : 'Copy'}
+      </button>
+    </>
   );
 }

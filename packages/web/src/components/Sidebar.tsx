@@ -5,12 +5,6 @@ import { wsRequestSessionHistory, wsDiscoverSessions, wsPinSession, wsRenameSess
 import { useThemeContext } from '../contexts/ThemeContext';
 import { useI18nContext } from '../contexts/I18nContext';
 import type { Theme } from '../hooks/useTheme';
-import DiscoverDialog from './DiscoverDialog';
-import ChannelManagePanel from './ChannelManagePanel';
-import AgentsPanel from './AgentsPanel';
-import GlobalSettingsDialog from './GlobalSettingsDialog';
-import { useVersionCheck } from '../hooks/useVersionCheck';
-import { UpdateDialog } from './UpdateDialog';
 
 const APP_VERSION = __APP_VERSION__;
 
@@ -205,14 +199,8 @@ export default function Sidebar({ onSessionSelect }: { onSessionSelect?: (sessio
   const lmSessionId = useLobbyStore((s) => s.lmSessionId);
   const amAvailable = useLobbyStore((s) => s.amAvailable);
   const amSessionId = useLobbyStore((s) => s.amSessionId);
-  const versionInfo = useVersionCheck();
-  const showUpdateDialog = useLobbyStore((s) => s.showUpdateDialog);
-  const setShowUpdateDialog = useLobbyStore((s) => s.setShowUpdateDialog);
-  const showChannelPanel = useLobbyStore((s) => s.showChannelPanel);
   const setShowChannelPanel = useLobbyStore((s) => s.setShowChannelPanel);
-  const showAgentsPanel = useLobbyStore((s) => s.showAgentsPanel);
   const setShowAgentsPanel = useLobbyStore((s) => s.setShowAgentsPanel);
-  const showSettingsDialog = useLobbyStore((s) => s.showSettingsDialog);
   const setShowSettingsDialog = useLobbyStore((s) => s.setShowSettingsDialog);
   const agentsCount = useLobbyStore((s) => s.agents.length);
   const agentsPanelRequest = useLobbyStore((s) => s.agentsPanelRequest);
@@ -222,17 +210,13 @@ export default function Sidebar({ onSessionSelect }: { onSessionSelect?: (sessio
     if (agentsPanelRequest) {
       setShowAgentsPanel(true);
     }
-  }, [agentsPanelRequest]);
+  }, [agentsPanelRequest, setShowAgentsPanel]);
   const channelProviders = useLobbyStore((s) => s.channelProviders);
   const { theme, setTheme } = useThemeContext();
   const { locale, setLocale, t } = useI18nContext();
 
   const sortedSessions = Object.values(sessions)
     .filter((s) => s.origin !== 'lobby-manager' && s.origin !== 'agent-manager')
-    // Agent-mode sessions are managed from the AgentsPanel / ChannelManagePanel
-    // — they can fan out to one-per-peer which would spam the Sidebar with
-    // near-identical rows. Hide them here; real-time `session.updated`
-    // broadcasts still land in the store so per-session routing keeps working.
     .filter((s) => !s.agentId)
     .sort((a, b) => {
       const aPinned = a.pinned ? 1 : 0;
@@ -264,191 +248,154 @@ export default function Sidebar({ onSessionSelect }: { onSessionSelect?: (sessio
         : t('common.dark');
 
   return (
-    <>
-      <aside className="w-full md:w-72 bg-surface-secondary border-r border-outline flex flex-col h-full">
-        <div className="px-4 py-3 border-b border-outline flex items-center justify-between">
-          <h1 className="text-lg font-bold text-on-surface">OpenLobby</h1>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => wsDiscoverSessions()}
-              disabled={!connected}
-              title={t('sidebar.importCliSessions')}
-              className="px-3 py-1 text-sm rounded-lg bg-primary hover:bg-primary-hover disabled:opacity-50 text-primary-on font-medium"
-            >
-              + {t('common.import')}
-            </button>
+    <aside className="w-full md:w-72 bg-surface-secondary border-r border-outline flex flex-col h-full">
+      <div className="px-4 py-3 border-b border-outline flex items-center justify-between">
+        <h1 className="text-lg font-bold text-on-surface">OpenLobby</h1>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => wsDiscoverSessions()}
+            disabled={!connected}
+            title={t('sidebar.importCliSessions')}
+            className="px-3 py-1 text-sm rounded-lg bg-primary hover:bg-primary-hover disabled:opacity-50 text-primary-on font-medium"
+          >
+            + {t('common.import')}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {sortedSessions.length === 0 && (
+          <div className="text-on-surface-muted text-sm text-center mt-8 px-4">
+            {t('sidebar.empty')}
           </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {sortedSessions.length === 0 && (
-            <div className="text-on-surface-muted text-sm text-center mt-8 px-4">
-              {t('sidebar.empty')}
-            </div>
-          )}
-          {sortedSessions.map((session) => (
-            <SessionCard
-              key={session.id}
-              session={session}
-              isActive={activeSessionId === session.id}
-              onClick={() => handleSelectSession(session.id)}
-              onPin={(pinned) => {
-                useLobbyStore.getState().updateSession({ ...session, pinned });
-                wsPinSession(session.id, pinned);
-              }}
-              onRename={(name) => {
-                useLobbyStore.getState().updateSession({ ...session, displayName: name });
-                wsRenameSession(session.id, name);
-              }}
-            />
-          ))}
-        </div>
-
-        <div className="px-4 py-2 border-t border-outline">
-          <button
-            onClick={() => {
-              if (lmSessionId) {
-                handleSelectSession(lmSessionId);
-              }
+        )}
+        {sortedSessions.map((session) => (
+          <SessionCard
+            key={session.id}
+            session={session}
+            isActive={activeSessionId === session.id}
+            onClick={() => handleSelectSession(session.id)}
+            onPin={(pinned) => {
+              useLobbyStore.getState().updateSession({ ...session, pinned });
+              wsPinSession(session.id, pinned);
             }}
-            disabled={!lmAvailable || !lmSessionId}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-              activeSessionId === lmSessionId
-                ? 'bg-primary-surface text-primary border border-primary/30'
-                : 'bg-surface-elevated text-on-surface-secondary hover:bg-[var(--color-sidebar-hover)]'
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
-            title={lmAvailable ? t('sidebar.openLobbyManagerSession') : t('sidebar.noCliAdapterAvailable')}
-          >
-            <span>&#x1F3E8;</span>
-            <span className="font-medium">{t('sidebar.lobbyManager')}</span>
-            {lmAvailable && (
-              <span className="ml-auto inline-block w-2 h-2 rounded-full bg-success" />
-            )}
-          </button>
-        </div>
-
-        <div className="px-4 py-2 border-t border-outline">
-          <button
-            onClick={() => {
-              if (amSessionId) {
-                handleSelectSession(amSessionId);
-              }
+            onRename={(name) => {
+              useLobbyStore.getState().updateSession({ ...session, displayName: name });
+              wsRenameSession(session.id, name);
             }}
-            disabled={!amAvailable || !amSessionId}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-              activeSessionId === amSessionId
-                ? 'bg-primary-surface text-primary border border-primary/30'
-                : 'bg-surface-elevated text-on-surface-secondary hover:bg-[var(--color-sidebar-hover)]'
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
-            title={amAvailable ? t('sidebar.openAgentManagerSession') : t('sidebar.noCliAdapterAvailable')}
-          >
-            <span>&#x1F9D9;</span>
-            <span className="font-medium">{t('sidebar.agentManager')}</span>
-            {amAvailable && (
-              <span className="ml-auto inline-block w-2 h-2 rounded-full bg-success" />
-            )}
-          </button>
-        </div>
-
-        <div className="px-3 py-2 border-t border-outline flex items-center gap-1">
-          <button
-            onClick={() => setShowChannelPanel(true)}
-            title={t('sidebar.imChannels')}
-            className="relative p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
-          >
-            <span>&#x1F4AC;</span>
-            {channelProviders.length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-success text-[9px] leading-none flex items-center justify-center font-medium text-white border border-surface-secondary">
-                {channelProviders.filter((p) => p.healthy).length}
-              </span>
-            )}
-          </button>
-
-          <button
-            onClick={() => setShowAgentsPanel(true)}
-            title={t('sidebar.agents')}
-            className="relative p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
-          >
-            <span>&#x1F916;</span>
-            {agentsCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-on text-[9px] leading-none flex items-center justify-center font-medium border border-surface-secondary">
-                {agentsCount}
-              </span>
-            )}
-          </button>
-
-          <span className="flex-1" />
-
-          <button
-            onClick={() => setShowSettingsDialog(true)}
-            title={t('common.settings')}
-            className="p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
-          >
-            <span>⚙️</span>
-          </button>
-          <button
-            onClick={cycleTheme}
-            title={t('sidebar.themeTitle', { theme: themeLabel })}
-            className="p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
-          >
-            <ThemeIcon theme={theme} />
-          </button>
-          <button
-            onClick={toggleLocale}
-            title={t('sidebar.toggleLanguage')}
-            className="p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors text-xs font-bold min-w-[32px]"
-          >
-            {locale === 'zh-CN' ? 'EN' : '中'}
-          </button>
-        </div>
-
-        <div className="px-4 py-1.5 border-t border-outline flex items-center justify-between">
-          <span
-            className={`inline-block w-2 h-2 rounded-full ${
-              connected ? 'bg-success' : 'bg-danger'
-            }`}
-            title={connected ? 'connected' : 'disconnected'}
           />
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-on-surface-muted">v{APP_VERSION}</span>
-            {versionInfo.hasUpdate && versionInfo.latest && (
-              <button
-                onClick={() => setShowUpdateDialog(true)}
-                className="text-xs text-primary hover:text-primary-hover transition-colors"
-                title={`v${versionInfo.latest} available`}
-              >
-                ↑
-              </button>
-            )}
-          </div>
-        </div>
-      </aside>
+        ))}
+      </div>
 
-      {showDiscoverDialog && (
-        <DiscoverDialog onClose={() => setShowDiscoverDialog(false)} />
-      )}
-      {showChannelPanel && (
-        <ChannelManagePanel onClose={() => setShowChannelPanel(false)} />
-      )}
-      {showAgentsPanel && (
-        <AgentsPanel
-          highlightId={agentsPanelRequest?.highlightId}
-          onClose={() => {
-            setShowAgentsPanel(false);
-            dismissAgentsPanel();
+      <div className="px-4 py-2 border-t border-outline">
+        <button
+          onClick={() => {
+            if (lmSessionId) {
+              handleSelectSession(lmSessionId);
+            }
           }}
+          disabled={!lmAvailable || !lmSessionId}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+            activeSessionId === lmSessionId
+              ? 'bg-primary-surface text-primary border border-primary/30'
+              : 'bg-surface-elevated text-on-surface-secondary hover:bg-[var(--color-sidebar-hover)]'
+          } disabled:opacity-40 disabled:cursor-not-allowed`}
+          title={lmAvailable ? t('sidebar.openLobbyManagerSession') : t('sidebar.noCliAdapterAvailable')}
+        >
+          <span>&#x1F3E8;</span>
+          <span className="font-medium">{t('sidebar.lobbyManager')}</span>
+          {lmAvailable && (
+            <span className="ml-auto inline-block w-2 h-2 rounded-full bg-success" />
+          )}
+        </button>
+      </div>
+
+      <div className="px-4 py-2 border-t border-outline">
+        <button
+          onClick={() => {
+            if (amSessionId) {
+              handleSelectSession(amSessionId);
+            }
+          }}
+          disabled={!amAvailable || !amSessionId}
+          className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
+            activeSessionId === amSessionId
+              ? 'bg-primary-surface text-primary border border-primary/30'
+              : 'bg-surface-elevated text-on-surface-secondary hover:bg-[var(--color-sidebar-hover)]'
+          } disabled:opacity-40 disabled:cursor-not-allowed`}
+          title={amAvailable ? t('sidebar.openAgentManagerSession') : t('sidebar.noCliAdapterAvailable')}
+        >
+          <span>&#x1F9D9;</span>
+          <span className="font-medium">{t('sidebar.agentManager')}</span>
+          {amAvailable && (
+            <span className="ml-auto inline-block w-2 h-2 rounded-full bg-success" />
+          )}
+        </button>
+      </div>
+
+      <div className="px-3 py-2 border-t border-outline flex items-center gap-1">
+        <button
+          onClick={() => setShowChannelPanel(true)}
+          title={t('sidebar.imChannels')}
+          className="relative p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
+        >
+          <span>&#x1F4AC;</span>
+          {channelProviders.length > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-success text-[9px] leading-none flex items-center justify-center font-medium text-white border border-surface-secondary">
+              {channelProviders.filter((p) => p.healthy).length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setShowAgentsPanel(true)}
+          title={t('sidebar.agents')}
+          className="relative p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
+        >
+          <span>&#x1F916;</span>
+          {agentsCount > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-primary-on text-[9px] leading-none flex items-center justify-center font-medium border border-surface-secondary">
+              {agentsCount}
+            </span>
+          )}
+        </button>
+
+        <span className="flex-1" />
+
+        <button
+          onClick={() => setShowSettingsDialog(true)}
+          title={t('common.settings')}
+          className="p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
+        >
+          <span>⚙️</span>
+        </button>
+        <button
+          onClick={cycleTheme}
+          title={t('sidebar.themeTitle', { theme: themeLabel })}
+          className="p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors"
+        >
+          <ThemeIcon theme={theme} />
+        </button>
+        <button
+          onClick={toggleLocale}
+          title={t('sidebar.toggleLanguage')}
+          className="p-2 rounded-lg hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary hover:text-on-surface transition-colors text-xs font-bold min-w-[32px]"
+        >
+          {locale === 'zh-CN' ? 'EN' : '中'}
+        </button>
+      </div>
+
+      <div className="px-4 py-1.5 border-t border-outline flex items-center justify-between">
+        <span
+          className={`inline-block w-2 h-2 rounded-full ${
+            connected ? 'bg-success' : 'bg-danger'
+          }`}
+          title={connected ? 'connected' : 'disconnected'}
         />
-      )}
-      {showSettingsDialog && (
-        <GlobalSettingsDialog onClose={() => setShowSettingsDialog(false)} />
-      )}
-      {showUpdateDialog && versionInfo.latest && (
-        <UpdateDialog
-          latestVersion={versionInfo.latest}
-          installMode={versionInfo.installMode}
-          onClose={() => setShowUpdateDialog(false)}
-        />
-      )}
-    </>
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-on-surface-muted">v{APP_VERSION}</span>
+        </div>
+      </div>
+    </aside>
   );
 }

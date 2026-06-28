@@ -19,9 +19,8 @@ vi.mock('../hooks/useWebSocket', () => ({
 // NOTE: vi.mock for useVersionCheck doesn't propagate to Sidebar's import
 // due to vitest module resolution — the mock factory runs in hoisted scope
 // and the component's import doesn't resolve to the mocked module.
-// The useVersionCheck return value dependency (versionInfo.latest)
-// prevents testing UpdateDialog rendering through Sidebar unit tests.
-// Store read pattern is verified by the other 3 dialog AC4 tests below.
+// Dialog rendering (showAgentsPanel, showChannelPanel, showSettingsDialog)
+// is tested in App.test.tsx (dialogs were lifted to App.tsx per #004).
 
 vi.mock('qrcode', () => ({
   default: { toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,') },
@@ -160,25 +159,7 @@ describe('Sidebar', () => {
     fireEvent.click(screen.getByText('Session s1'));
   });
 
-  // ── AC4: Dialog state from store ───────────────────
-  it('AC4: reads showAgentsPanel from store', () => {
-    useLobbyStore.setState({ showAgentsPanel: true });
-    renderWithProviders(<Sidebar />);
-    expect(screen.getByText('Agent Configuration')).toBeInTheDocument();
-  });
-
-  it('AC4: reads showChannelPanel from store', () => {
-    useLobbyStore.setState({ showChannelPanel: true });
-    renderWithProviders(<Sidebar />);
-    expect(screen.getByText('Channel Management')).toBeInTheDocument();
-  });
-
-  it('AC4: reads showSettingsDialog from store', () => {
-    useLobbyStore.setState({ showSettingsDialog: true });
-    renderWithProviders(<Sidebar />);
-    expect(screen.getByText('Default adapter')).toBeInTheDocument();
-  });
-
+  // ── AC4: Dialog state from store (dialogs now rendered in App.tsx) ──
   it('AC4: reads showUpdateDialog from store — triggers dialog via store state', () => {
     // Since useVersionCheck mock doesn't propagate to Sidebar component
     // (vitest module resolution limitation), we verify the store interaction
@@ -274,11 +255,5 @@ describe('Sidebar', () => {
     expect(screen.getByTitle('Settings')).toBeInTheDocument();
     expect(screen.getByTitle(/Theme/)).toBeInTheDocument();
     expect(screen.getByTitle('Toggle Language')).toBeInTheDocument();
-  });
-
-  it('AC7: renders showDiscoverDialog from store', () => {
-    useLobbyStore.setState({ showDiscoverDialog: true });
-    renderWithProviders(<Sidebar />);
-    expect(screen.getByText('Import')).toBeInTheDocument();
   });
 });
