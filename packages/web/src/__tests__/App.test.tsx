@@ -75,7 +75,7 @@ vi.mock('../hooks/useTheme', () => ({
   }),
 }));
 
-type MatchMediaHandler = (this: MediaQueryList, e: MediaQueryListEvent) => void;
+type MatchMediaHandler = (e: MediaQueryListEvent) => void;
 
 function stubMatchMedia(matches: boolean) {
   const listeners = new Set<MatchMediaHandler>();
