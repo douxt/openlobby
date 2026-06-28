@@ -151,3 +151,30 @@ Agent B 遇阻 → 需写 _handoff/outbox/agent-b/ 委托 A
 
 - [ ] `_handoff/outbox/agent-b/openlobby-2026-06-28-01.md` 已写入本地，需 A 拉取
 - [ ] 管线基础设施恢复被此阻塞
+
+### 建议：事前通知而非事后拦截
+
+当前 Agent B 约束机制是**事后拦截**（hook 报 BLOCKED），Agent B 不知道规则，只能试错：
+
+```
+B 尝试 git push main → BLOCKED → 才知道要 ai/ 分支
+B 尝试提交 _handoff/ → BLOCKED → 才知道这是受保护路径
+B 尝试 systemctl → BLOCKED → 才知道禁止基础设施操作
+```
+
+**建议改为事前通知**：Agent B 会话启动时（CLAUDE.md 加载后），主动告知可用操作边界：
+
+```
+## Agent B 当前可用操作
+- 分支: ai/ 前缀，当前可切到 ai/<issue>-<desc>
+- 文件: packages/web/src/** (白名单), docs/** (文档)
+- 遇阻: _handoff/outbox/agent-b/ 写委托（本地写即可，A 定期 pull）
+- 禁止: main 直推、.devflow/、systemctl、docker、merge/rebase main
+```
+
+**实现建议**:
+| # | 改什么 | 位置 |
+|---|--------|------|
+| 1 | CLAUDE.md Agent B 章节加"首次启动提示"：简洁列出可用/禁止 | `.claude/CLAUDE.md` |
+| 2 | hook 报错信息加引导："禁止 X → 请用 Y 替代" | pre-push hook |
+| 3 | 首个 message 自动输出可用操作摘要 | 系统 prompt 或 CLAUDE.md 顶部
