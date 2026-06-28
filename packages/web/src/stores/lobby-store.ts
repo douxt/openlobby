@@ -116,6 +116,13 @@ interface LobbyState {
   discoveredSessions: SessionSummaryData[];
   showDiscoverDialog: boolean;
 
+  // Mobile drawer state
+  drawerOpen: boolean;
+  showAgentsPanel: boolean;
+  showChannelPanel: boolean;
+  showSettingsDialog: boolean;
+  showUpdateDialog: boolean;
+
   // Lobby Manager state
   lmAvailable: boolean;
   lmSessionId: string | null;
@@ -168,6 +175,11 @@ interface LobbyState {
   setSessions: (sessions: SessionSummaryData[]) => void;
   setDiscoveredSessions: (sessions: SessionSummaryData[]) => void;
   setShowDiscoverDialog: (show: boolean) => void;
+  setDrawerOpen: (open: boolean) => void;
+  setShowAgentsPanel: (show: boolean) => void;
+  setShowChannelPanel: (show: boolean) => void;
+  setShowSettingsDialog: (show: boolean) => void;
+  setShowUpdateDialog: (show: boolean) => void;
 
   // Lobby Manager actions
   setLmAvailable: (available: boolean) => void;
@@ -233,6 +245,12 @@ export const useLobbyStore = create<LobbyState>((set) => ({
   connected: false,
   discoveredSessions: [],
   showDiscoverDialog: false,
+
+  drawerOpen: false,
+  showAgentsPanel: false,
+  showChannelPanel: false,
+  showSettingsDialog: false,
+  showUpdateDialog: false,
 
   lmAvailable: false,
   lmSessionId: null,
@@ -516,6 +534,12 @@ export const useLobbyStore = create<LobbyState>((set) => ({
       showDiscoverDialog: show,
       discoveredSessions: show ? state.discoveredSessions : [],
     })),
+
+  setDrawerOpen: (open) => set({ drawerOpen: open }),
+  setShowAgentsPanel: (show) => set({ showAgentsPanel: show }),
+  setShowChannelPanel: (show) => set({ showChannelPanel: show }),
+  setShowSettingsDialog: (show) => set({ showSettingsDialog: show }),
+  setShowUpdateDialog: (show) => set({ showUpdateDialog: show }),
 
   // Lobby Manager actions
   setLmAvailable: (available) => set({ lmAvailable: available }),

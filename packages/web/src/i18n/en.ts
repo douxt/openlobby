@@ -40,6 +40,10 @@ export const enMessages = {
   'app.emptyStateHint': 'Click "+ Import" in the sidebar to get started',
   'app.sessionEndedHint': 'Session has ended. Create or import a session to continue.',
 
+  'nav.sessions': 'Sessions',
+  'nav.agents': 'Agents',
+  'nav.channels': 'Channels',
+
   'sidebar.importCliSessions': 'Import CLI sessions',
   'sidebar.empty': 'No sessions yet. Click "+ Import" to create one.',
   'sidebar.rename': 'Rename',
