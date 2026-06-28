@@ -38,6 +38,7 @@ export const zhCNMessages = {
   'app.recoverToIdle': '恢复为空闲',
   'app.emptyStateTitle': '选择一个会话或创建新会话',
   'app.emptyStateHint': '点击侧边栏中的“+ 导入”开始',
+  'app.emptyStateMobile': '点击菜单或"会话"标签页选择会话',
   'app.sessionEndedHint': '会话已结束。创建或导入一个会话以继续。',
 
   'sidebar.importCliSessions': '导入 CLI 会话',
