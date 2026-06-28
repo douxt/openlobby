@@ -1,0 +1,93 @@
+# OpenLobby — Multi-Session Claude Code Chat
+
+Fork from kkkkkk1k1/openlobby. Web-based multi-session Claude Code interface.
+
+## Tech Stack
+- Node.js 22+
+- npm
+- TypeScript
+
+## Project Structure
+- `packages/` — monorepo packages
+- `scripts/` — build & dev scripts
+
+## Common Commands
+```bash
+npm test        # Run tests
+npm run build   # Build
+npm run lint    # Lint
+```
+
+<!-- ⚠️ 以下由 ai-dev-flow-server install.sh 自动追加 -->
+## AI Dev Flow（服务器版）
+
+本项目已安装 ai-dev-flow-server 开发流程约束。
+
+### Gate 流程
+
+| Gate | 命令 | 说明 |
+|------|------|------|
+| 1 | `/gate-1-grill` | 需求对齐 — grill 全方位拷问 |
+| 2 | `/gate-2-prd` | 产出 PRD — 附带宪法自检 |
+| 3 | `/gate-3-issues` | 拆解 Issue — 垂直切片 + 宪法对照 |
+| 4 | `/gate-4-review` | Issue 评审 — CC 子进程独立评审 |
+| 5 | `/gate-5-prep` | 环境检查 — .devflow/ 完整性 |
+| 6 | `/gate-6-afk` | AFK 就绪 — 确认 dispatch 管线 |
+
+### Issue 状态机
+
+```
+backlog → ready → in_progress → done
+```
+
+- 人将 issue 拖到 `ready` → dispatch.timer 自动消化
+- dispatch.sh: 宪法检查 → 原子抢占 → Archon 7 节点工作流 → PR
+- PR 创建后 Telegram 通知审批
+
+### 关键路径
+
+| 内容 | 路径 |
+|------|------|
+| 项目配置 | `.devflow/config.yaml` |
+| 知识库 | `.devflow/knowledge/` |
+| Gate 状态 | `.gate-state` |
+| Issue 目录 | `issues/` |
+| 调度日志 | `logs/dispatch.log` |
+<!-- ai-dev-flow-server end -->
+
+<!-- ⚠️ 以下由 ai-dev-flow-server 自动追加 -->
+## Agent B 行为边界（硬性，不可绕过）
+
+### 代码修改范围
+- 只能修改业务功能代码（src/、lib/、app/ 等业务目录）
+- 禁止修改：.devflow/、.github/workflows/、Makefile、Dockerfile、docker-compose*.yml、systemd unit 文件、nginx/Apache/Caddy 配置、部署脚本、CI/CD 配置、密钥文件
+- 禁止修改 CLAUDE.md 中 `## Agent B 行为边界` 及 `## 项目壁垒` 两个章节
+
+### 工作区规则（替代 worktree 隔离）
+- 无 shell 无法创建 worktree → **分支即隔离**
+- 必须在 `ai/` 分支上工作，禁止直接在 master/main 上修改文件
+- 开始工作前：`git checkout -b ai/<###>-<desc>`（从 master 最新切出）
+- 多任务并发时，不同 issue 用不同 `ai/` 分支，不可混在一个分支
+
+### Git 操作约束
+- 禁止 `git push` 到 `master` 或 `main` 分支（会被 pre-push hook 拦截）
+- 禁止创建不以 `ai/` 开头的分支
+- 禁止 `git merge`、`git rebase` master/main 到自己的分支（只能 A 做）
+- 禁止 `git push --force`、`git commit --amend` 在已推送分支
+- 所有代码变更走 `ai/<###>-<desc>` 分支 → push → 写 handoff 委托 A 审阅合并
+
+### 基础设施操作
+- 禁止执行：systemctl、docker、kubectl、nginx -s、pm2、supervisorctl
+- 禁止读 /etc/ 下的非本项目配置文件
+- 需基础设施操作时 → 写 _handoff/outbox/agent-b/ 委托 A
+
+### 遇阻协议
+- 碰到上述任一禁止操作时 → 不尝试绕过 → 写 handoff 委托 A
+- 不确定某操作是否被允许 → 读 CLAUDE.md 本段确认 → 不在列表则不允许
+- 连续 3 次因边界限制无法继续 → 标记 issue 为 blocked，写 handoff 说明原因
+
+### Agent 协作通道
+- 写委托: _handoff/outbox/agent-b/
+- 读回复: _handoff/inbox/agent-b/
+- 消息模板: _handoff/TEMPLATE.md
+<!-- ai-dev-flow-server end -->

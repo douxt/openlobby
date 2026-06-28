@@ -1,0 +1,399 @@
+[2026-06-27 16:14:36] WARN: git pull 失败
+[2026-06-27 16:14:36] RECONCILE: 无需修复
+[2026-06-27 16:15:23] WARN: git pull 失败
+[2026-06-27 16:15:23] WARN: git pull 失败
+[2026-06-27 16:15:23] RECONCILE: 无需修复
+[2026-06-27 16:15:23] RECONCILE: 无需修复
+[2026-06-27 16:30:25] WARN: git pull 失败
+[2026-06-27 16:30:25] WARN: git pull 失败
+[2026-06-27 16:30:25] ORPHAN: #001 in_progress 但无对应 ai/ 分支，回收为 ready
+[2026-06-27 16:30:25] ORPHAN: #001 in_progress 但无对应 ai/ 分支，回收为 ready
+[feat/mobile-adaptation c8b4901] reconcile: 状态修复 (2026-06-27)
+ 7 files changed, 714 insertions(+), 1 deletion(-)
+ create mode 100644 issues/.gitkeep
+ create mode 100644 issues/002-mobile-drawer-nav.md
+ create mode 100644 issues/003-sidebar-adaptation.md
+ create mode 100644 issues/004-app-layout-integration.md
+ create mode 100644 issues/005-integration-verification.md
+ create mode 100644 issues/TEMPLATE.md
+[2026-06-27 16:30:30] RECONCILE: 状态修复完成
+[2026-06-27 16:30:30] RECONCILE: 状态修复完成
+[2026-06-27 16:45:05] ORPHAN: #001 in_progress 但无对应 ai/ 分支，回收为 ready
+[2026-06-27 16:45:05] ORPHAN: #001 in_progress 但无对应 ai/ 分支，回收为 ready
+[feat/mobile-adaptation 30b1dc6] reconcile: 状态修复 (2026-06-27)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-27 16:45:10] RECONCILE: 状态修复完成
+[2026-06-27 16:45:10] RECONCILE: 状态修复完成
+[2026-06-27 17:00:07] RECONCILE: 无需修复
+[2026-06-27 17:00:07] RECONCILE: 无需修复
+[2026-06-27 17:15:05] WARN: git pull 失败
+[2026-06-27 17:15:05] WARN: git pull 失败
+[2026-06-27 17:15:05] RECONCILE: 无需修复
+[2026-06-27 17:15:05] RECONCILE: 无需修复
+[2026-06-27 17:30:19] WARN: git pull 失败
+[2026-06-27 17:30:19] WARN: git pull 失败
+[2026-06-27 17:30:19] RECONCILE: 无需修复
+[2026-06-27 17:30:19] RECONCILE: 无需修复
+[2026-06-27 17:45:01] WARN: git pull 失败
+[2026-06-27 17:45:01] WARN: git pull 失败
+[2026-06-27 17:45:01] RECONCILE: 无需修复
+[2026-06-27 17:45:01] RECONCILE: 无需修复
+[2026-06-27 18:00:19] WARN: git pull 失败
+[2026-06-27 18:00:19] WARN: git pull 失败
+[2026-06-27 18:00:19] RECONCILE: 无需修复
+[2026-06-27 18:00:19] RECONCILE: 无需修复
+[2026-06-27 18:15:19] WARN: git pull 失败
+[2026-06-27 18:15:19] WARN: git pull 失败
+[2026-06-27 18:15:19] RECONCILE: 无需修复
+[2026-06-27 18:15:19] RECONCILE: 无需修复
+[2026-06-27 18:30:19] WARN: git pull 失败
+[2026-06-27 18:30:19] WARN: git pull 失败
+[2026-06-27 18:30:19] RECONCILE: 无需修复
+[2026-06-27 18:30:19] RECONCILE: 无需修复
+[2026-06-27 18:45:19] WARN: git pull 失败
+[2026-06-27 18:45:19] WARN: git pull 失败
+[2026-06-27 18:45:19] RECONCILE: 无需修复
+[2026-06-27 18:45:19] RECONCILE: 无需修复
+[2026-06-27 19:00:02] WARN: git pull 失败
+[2026-06-27 19:00:02] WARN: git pull 失败
+[2026-06-27 19:00:03] RECONCILE: 无需修复
+[2026-06-27 19:00:03] RECONCILE: 无需修复
+[2026-06-27 19:15:19] WARN: git pull 失败
+[2026-06-27 19:15:19] WARN: git pull 失败
+[2026-06-27 19:15:19] RECONCILE: 无需修复
+[2026-06-27 19:15:19] RECONCILE: 无需修复
+[2026-06-27 19:30:19] WARN: git pull 失败
+[2026-06-27 19:30:19] WARN: git pull 失败
+[2026-06-27 19:30:19] RECONCILE: 无需修复
+[2026-06-27 19:30:19] RECONCILE: 无需修复
+[2026-06-27 19:45:19] WARN: git pull 失败
+[2026-06-27 19:45:19] WARN: git pull 失败
+[2026-06-27 19:45:19] RECONCILE: 无需修复
+[2026-06-27 19:45:19] RECONCILE: 无需修复
+[2026-06-27 20:00:23] WARN: git pull 失败
+[2026-06-27 20:00:23] WARN: git pull 失败
+[2026-06-27 20:00:23] RECONCILE: 无需修复
+[2026-06-27 20:00:23] RECONCILE: 无需修复
+[2026-06-27 20:15:10] RECONCILE: 无需修复
+[2026-06-27 20:15:10] RECONCILE: 无需修复
+[2026-06-27 20:30:16] RECONCILE: 无需修复
+[2026-06-27 20:30:16] RECONCILE: 无需修复
+[2026-06-27 20:45:20] RECONCILE: 无需修复
+[2026-06-27 20:45:20] RECONCILE: 无需修复
+[2026-06-27 21:00:23] WARN: git pull 失败
+[2026-06-27 21:00:23] WARN: git pull 失败
+[2026-06-27 21:00:23] RECONCILE: 无需修复
+[2026-06-27 21:00:23] RECONCILE: 无需修复
+[2026-06-27 21:15:13] WARN: git pull 失败
+[2026-06-27 21:15:13] WARN: git pull 失败
+[2026-06-27 21:15:13] RECONCILE: 无需修复
+[2026-06-27 21:15:13] RECONCILE: 无需修复
+[2026-06-27 21:30:16] AUTO_READY: #002 依赖全部 done，backlog → ready
+[2026-06-27 21:30:16] AUTO_READY: #002 依赖全部 done，backlog → ready
+[2026-06-27 21:30:16] AUTO_READY: #003 依赖全部 done，backlog → ready
+[2026-06-27 21:30:16] AUTO_READY: #003 依赖全部 done，backlog → ready
+[feat/mobile-adaptation 19e504c] reconcile: 状态修复 (2026-06-27)
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+[2026-06-27 21:30:20] RECONCILE: 状态修复完成
+[2026-06-27 21:30:20] RECONCILE: 状态修复完成
+[2026-06-27 21:45:04] WARN: git pull 失败
+[2026-06-27 21:45:04] WARN: git pull 失败
+[2026-06-27 21:45:04] RECONCILE: 无需修复
+[2026-06-27 21:45:04] RECONCILE: 无需修复
+[2026-06-27 22:00:12] WARN: git pull 失败
+[2026-06-27 22:00:12] WARN: git pull 失败
+[2026-06-27 22:00:12] RECONCILE: 无需修复
+[2026-06-27 22:00:12] RECONCILE: 无需修复
+[2026-06-27 22:15:07] WARN: git pull 失败
+[2026-06-27 22:15:07] WARN: git pull 失败
+[2026-06-27 22:15:07] ORPHAN: #002 in_progress 但无对应 ai/ 分支，回收为 ready
+[2026-06-27 22:15:07] ORPHAN: #002 in_progress 但无对应 ai/ 分支，回收为 ready
+[feat/mobile-adaptation 4342426] reconcile: 状态修复 (2026-06-27)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-27 22:15:13] RECONCILE: 状态修复完成
+[2026-06-27 22:15:13] RECONCILE: 状态修复完成
+[2026-06-27 22:30:12] WARN: git pull 失败
+[2026-06-27 22:30:12] WARN: git pull 失败
+[2026-06-27 22:30:12] RECONCILE: 无需修复
+[2026-06-27 22:30:12] RECONCILE: 无需修复
+[2026-06-27 22:45:17] WARN: git pull 失败
+[2026-06-27 22:45:17] WARN: git pull 失败
+[2026-06-27 22:45:17] RECONCILE: 无需修复
+[2026-06-27 22:45:17] RECONCILE: 无需修复
+[2026-06-27 23:00:17] WARN: git pull 失败
+[2026-06-27 23:00:17] WARN: git pull 失败
+[2026-06-27 23:00:17] RECONCILE: 无需修复
+[2026-06-27 23:00:17] RECONCILE: 无需修复
+[2026-06-27 23:15:19] WARN: git pull 失败
+[2026-06-27 23:15:19] WARN: git pull 失败
+[2026-06-27 23:15:19] RECONCILE: 无需修复
+[2026-06-27 23:15:19] RECONCILE: 无需修复
+[2026-06-27 23:30:05] ORPHAN: #003 in_progress 但无对应 ai/ 分支，回收为 ready
+[2026-06-27 23:30:05] ORPHAN: #003 in_progress 但无对应 ai/ 分支，回收为 ready
+[feat/mobile-adaptation 3f2695d] reconcile: 状态修复 (2026-06-27)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-27 23:30:09] RECONCILE: 状态修复完成
+[2026-06-27 23:30:09] RECONCILE: 状态修复完成
+[2026-06-27 23:45:05] RECONCILE: 无需修复
+[2026-06-27 23:45:05] RECONCILE: 无需修复
+[2026-06-28 00:00:00] WARN: git pull 失败
+[2026-06-28 00:00:00] WARN: git pull 失败
+[2026-06-28 00:00:00] RECONCILE: 无需修复
+[2026-06-28 00:00:00] RECONCILE: 无需修复
+[2026-06-28 00:15:00] WARN: git pull 失败
+[2026-06-28 00:15:00] WARN: git pull 失败
+[2026-06-28 00:15:00] RECONCILE: 无需修复
+[2026-06-28 00:15:00] RECONCILE: 无需修复
+[2026-06-28 00:30:19] WARN: git pull 失败
+[2026-06-28 00:30:19] WARN: git pull 失败
+[2026-06-28 00:30:19] RECONCILE: 无需修复
+[2026-06-28 00:30:19] RECONCILE: 无需修复
+[2026-06-28 00:45:19] WARN: git pull 失败
+[2026-06-28 00:45:19] WARN: git pull 失败
+[2026-06-28 00:45:19] RECONCILE: 无需修复
+[2026-06-28 00:45:19] RECONCILE: 无需修复
+[2026-06-28 01:00:12] WARN: git pull 失败
+[2026-06-28 01:00:12] WARN: git pull 失败
+[2026-06-28 01:00:12] RECONCILE: 无需修复
+[2026-06-28 01:00:12] RECONCILE: 无需修复
+[2026-06-28 01:15:19] WARN: git pull 失败
+[2026-06-28 01:15:19] WARN: git pull 失败
+[2026-06-28 01:15:19] RECONCILE: 无需修复
+[2026-06-28 01:15:19] RECONCILE: 无需修复
+[2026-06-28 01:30:12] WARN: git pull 失败
+[2026-06-28 01:30:12] WARN: git pull 失败
+[2026-06-28 01:30:12] RECONCILE: 无需修复
+[2026-06-28 01:30:12] RECONCILE: 无需修复
+[2026-06-28 01:45:12] WARN: git pull 失败
+[2026-06-28 01:45:12] WARN: git pull 失败
+[2026-06-28 01:45:12] RECONCILE: 无需修复
+[2026-06-28 01:45:12] RECONCILE: 无需修复
+[2026-06-28 02:00:19] WARN: git pull 失败
+[2026-06-28 02:00:19] WARN: git pull 失败
+[2026-06-28 02:00:19] RECONCILE: 无需修复
+[2026-06-28 02:00:19] RECONCILE: 无需修复
+[2026-06-28 02:15:13] WARN: git pull 失败
+[2026-06-28 02:15:13] WARN: git pull 失败
+[2026-06-28 02:15:14] RECONCILE: 无需修复
+[2026-06-28 02:15:14] RECONCILE: 无需修复
+[2026-06-28 02:30:19] WARN: git pull 失败
+[2026-06-28 02:30:19] WARN: git pull 失败
+[2026-06-28 02:30:19] RECONCILE: 无需修复
+[2026-06-28 02:30:19] RECONCILE: 无需修复
+[2026-06-28 02:45:00] WARN: git pull 失败
+[2026-06-28 02:45:00] WARN: git pull 失败
+[2026-06-28 02:45:00] RECONCILE: 无需修复
+[2026-06-28 02:45:00] RECONCILE: 无需修复
+[2026-06-28 03:00:02] WARN: git pull 失败
+[2026-06-28 03:00:02] WARN: git pull 失败
+[2026-06-28 03:00:02] RECONCILE: 无需修复
+[2026-06-28 03:00:02] RECONCILE: 无需修复
+[2026-06-28 03:15:19] WARN: git pull 失败
+[2026-06-28 03:15:19] WARN: git pull 失败
+[2026-06-28 03:15:19] RECONCILE: 无需修复
+[2026-06-28 03:15:19] RECONCILE: 无需修复
+[2026-06-28 03:30:19] WARN: git pull 失败
+[2026-06-28 03:30:19] WARN: git pull 失败
+[2026-06-28 03:30:19] RECONCILE: 无需修复
+[2026-06-28 03:30:19] RECONCILE: 无需修复
+[2026-06-28 03:45:12] WARN: git pull 失败
+[2026-06-28 03:45:12] WARN: git pull 失败
+[2026-06-28 03:45:12] RECONCILE: 无需修复
+[2026-06-28 03:45:12] RECONCILE: 无需修复
+[2026-06-28 04:00:12] WARN: git pull 失败
+[2026-06-28 04:00:12] WARN: git pull 失败
+[2026-06-28 04:00:12] RECONCILE: 无需修复
+[2026-06-28 04:00:12] RECONCILE: 无需修复
+[2026-06-28 04:15:19] WARN: git pull 失败
+[2026-06-28 04:15:19] WARN: git pull 失败
+[2026-06-28 04:15:19] RECONCILE: 无需修复
+[2026-06-28 04:15:19] RECONCILE: 无需修复
+[2026-06-28 04:30:06] WARN: git pull 失败
+[2026-06-28 04:30:06] WARN: git pull 失败
+[2026-06-28 04:30:06] RECONCILE: 无需修复
+[2026-06-28 04:30:06] RECONCILE: 无需修复
+[2026-06-28 04:45:19] WARN: git pull 失败
+[2026-06-28 04:45:19] WARN: git pull 失败
+[2026-06-28 04:45:19] RECONCILE: 无需修复
+[2026-06-28 04:45:19] RECONCILE: 无需修复
+[2026-06-28 05:00:00] WARN: git pull 失败
+[2026-06-28 05:00:00] WARN: git pull 失败
+[2026-06-28 05:00:00] RECONCILE: 无需修复
+[2026-06-28 05:00:00] RECONCILE: 无需修复
+[2026-06-28 05:15:17] WARN: git pull 失败
+[2026-06-28 05:15:17] WARN: git pull 失败
+[2026-06-28 05:15:17] RECONCILE: 无需修复
+[2026-06-28 05:15:17] RECONCILE: 无需修复
+[2026-06-28 05:30:12] WARN: git pull 失败
+[2026-06-28 05:30:12] WARN: git pull 失败
+[2026-06-28 05:30:12] RECONCILE: 无需修复
+[2026-06-28 05:30:12] RECONCILE: 无需修复
+[2026-06-28 05:45:19] WARN: git pull 失败
+[2026-06-28 05:45:19] WARN: git pull 失败
+[2026-06-28 05:45:19] RECONCILE: 无需修复
+[2026-06-28 05:45:19] RECONCILE: 无需修复
+[2026-06-28 06:00:02] WARN: git pull 失败
+[2026-06-28 06:00:02] WARN: git pull 失败
+[2026-06-28 06:00:03] RECONCILE: 无需修复
+[2026-06-28 06:00:03] RECONCILE: 无需修复
+[2026-06-28 06:15:18] WARN: git pull 失败
+[2026-06-28 06:15:18] WARN: git pull 失败
+[2026-06-28 06:15:18] RECONCILE: 无需修复
+[2026-06-28 06:15:18] RECONCILE: 无需修复
+[2026-06-28 06:30:19] WARN: git pull 失败
+[2026-06-28 06:30:19] WARN: git pull 失败
+[2026-06-28 06:30:19] RECONCILE: 无需修复
+[2026-06-28 06:30:19] RECONCILE: 无需修复
+[2026-06-28 06:45:04] WARN: git pull 失败
+[2026-06-28 06:45:04] WARN: git pull 失败
+[2026-06-28 06:45:04] RECONCILE: 无需修复
+[2026-06-28 06:45:04] RECONCILE: 无需修复
+[2026-06-28 07:00:19] WARN: git pull 失败
+[2026-06-28 07:00:19] WARN: git pull 失败
+[2026-06-28 07:00:19] RECONCILE: 无需修复
+[2026-06-28 07:00:19] RECONCILE: 无需修复
+[2026-06-28 07:15:12] WARN: git pull 失败
+[2026-06-28 07:15:12] WARN: git pull 失败
+[2026-06-28 07:15:12] RECONCILE: 无需修复
+[2026-06-28 07:15:12] RECONCILE: 无需修复
+[2026-06-28 07:30:19] WARN: git pull 失败
+[2026-06-28 07:30:19] WARN: git pull 失败
+[2026-06-28 07:30:19] RECONCILE: 无需修复
+[2026-06-28 07:30:19] RECONCILE: 无需修复
+[2026-06-28 07:45:12] WARN: git pull 失败
+[2026-06-28 07:45:12] WARN: git pull 失败
+[2026-06-28 07:45:12] RECONCILE: 无需修复
+[2026-06-28 07:45:12] RECONCILE: 无需修复
+[2026-06-28 08:00:12] WARN: git pull 失败
+[2026-06-28 08:00:12] WARN: git pull 失败
+[2026-06-28 08:00:12] RECONCILE: 无需修复
+[2026-06-28 08:00:12] RECONCILE: 无需修复
+[2026-06-28 08:15:19] WARN: git pull 失败
+[2026-06-28 08:15:19] WARN: git pull 失败
+[2026-06-28 08:15:19] RECONCILE: 无需修复
+[2026-06-28 08:15:19] RECONCILE: 无需修复
+[2026-06-28 08:30:10] WARN: git pull 失败
+[2026-06-28 08:30:10] WARN: git pull 失败
+[2026-06-28 08:30:10] RECONCILE: 无需修复
+[2026-06-28 08:30:10] RECONCILE: 无需修复
+[2026-06-28 08:45:19] WARN: git pull 失败
+[2026-06-28 08:45:19] WARN: git pull 失败
+[2026-06-28 08:45:19] RECONCILE: 无需修复
+[2026-06-28 08:45:19] RECONCILE: 无需修复
+[2026-06-28 09:00:10] WARN: git pull 失败
+[2026-06-28 09:00:10] WARN: git pull 失败
+[2026-06-28 09:00:10] RECONCILE: 无需修复
+[2026-06-28 09:00:10] RECONCILE: 无需修复
+[2026-06-28 09:15:00] WARN: git pull 失败
+[2026-06-28 09:15:00] WARN: git pull 失败
+[2026-06-28 09:15:00] RECONCILE: 无需修复
+[2026-06-28 09:15:00] RECONCILE: 无需修复
+[2026-06-28 09:30:19] WARN: git pull 失败
+[2026-06-28 09:30:19] WARN: git pull 失败
+[2026-06-28 09:30:19] RECONCILE: 无需修复
+[2026-06-28 09:30:19] RECONCILE: 无需修复
+[2026-06-28 09:45:19] WARN: git pull 失败
+[2026-06-28 09:45:19] WARN: git pull 失败
+[2026-06-28 09:45:19] AUTO_READY: #004 依赖全部 done，backlog → ready
+[2026-06-28 09:45:19] AUTO_READY: #004 依赖全部 done，backlog → ready
+[feat/mobile-adaptation 1f1999d] reconcile: 状态修复 (2026-06-28)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-28 09:45:24] RECONCILE: 状态修复完成
+[2026-06-28 09:45:24] RECONCILE: 状态修复完成
+[2026-06-28 10:00:00] WARN: git pull 失败
+[2026-06-28 10:00:00] WARN: git pull 失败
+[2026-06-28 10:00:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[2026-06-28 10:00:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[feat/mobile-adaptation 772fead] reconcile: 状态修复 (2026-06-28)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-28 10:00:04] RECONCILE: 状态修复完成
+[2026-06-28 10:00:04] RECONCILE: 状态修复完成
+[2026-06-28 10:15:00] WARN: git pull 失败
+[2026-06-28 10:15:00] WARN: git pull 失败
+[2026-06-28 10:15:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[2026-06-28 10:15:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[feat/mobile-adaptation 279a2f8] reconcile: 状态修复 (2026-06-28)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-28 10:15:04] RECONCILE: 状态修复完成
+[2026-06-28 10:15:04] RECONCILE: 状态修复完成
+[2026-06-28 10:30:00] WARN: git pull 失败
+[2026-06-28 10:30:00] WARN: git pull 失败
+[2026-06-28 10:30:00] RECONCILE: 无需修复
+[2026-06-28 10:30:00] RECONCILE: 无需修复
+[2026-06-28 10:45:00] WARN: git pull 失败
+[2026-06-28 10:45:00] WARN: git pull 失败
+[2026-06-28 10:45:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[2026-06-28 10:45:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[feat/mobile-adaptation 3f7ce96] reconcile: 状态修复 (2026-06-28)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-28 10:45:04] RECONCILE: 状态修复完成
+[2026-06-28 10:45:04] RECONCILE: 状态修复完成
+[2026-06-28 11:00:00] WARN: git pull 失败
+[2026-06-28 11:00:00] WARN: git pull 失败
+[2026-06-28 11:00:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[2026-06-28 11:00:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[feat/mobile-adaptation 6256e13] reconcile: 状态修复 (2026-06-28)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-28 11:00:04] RECONCILE: 状态修复完成
+[2026-06-28 11:00:04] RECONCILE: 状态修复完成
+[2026-06-28 11:15:00] WARN: git pull 失败
+[2026-06-28 11:15:00] WARN: git pull 失败
+[2026-06-28 11:15:00] RECONCILE: 无需修复
+[2026-06-28 11:15:00] RECONCILE: 无需修复
+[2026-06-28 11:30:00] WARN: git pull 失败
+[2026-06-28 11:30:00] WARN: git pull 失败
+[2026-06-28 11:30:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[2026-06-28 11:30:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[feat/mobile-adaptation f3943e1] reconcile: 状态修复 (2026-06-28)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-28 11:30:04] RECONCILE: 状态修复完成
+[2026-06-28 11:30:04] RECONCILE: 状态修复完成
+[2026-06-28 11:45:00] WARN: git pull 失败
+[2026-06-28 11:45:00] WARN: git pull 失败
+[2026-06-28 11:45:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[2026-06-28 11:45:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[feat/mobile-adaptation be9a359] reconcile: 状态修复 (2026-06-28)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-28 11:45:04] RECONCILE: 状态修复完成
+[2026-06-28 11:45:04] RECONCILE: 状态修复完成
+[2026-06-28 12:00:00] WARN: git pull 失败
+[2026-06-28 12:00:00] WARN: git pull 失败
+[2026-06-28 12:00:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[2026-06-28 12:00:00] ORPHAN: #004 in_progress 但无对应 ai/archon 分支，回收为 ready
+[feat/mobile-adaptation 3957aae] reconcile: 状态修复 (2026-06-28)
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+[2026-06-28 12:00:04] RECONCILE: 状态修复完成
+[2026-06-28 12:00:04] RECONCILE: 状态修复完成
+[2026-06-28 12:15:00] WARN: git pull 失败
+[2026-06-28 12:15:00] WARN: git pull 失败
+[2026-06-28 12:15:00] RECONCILE: 无需修复
+[2026-06-28 12:15:00] RECONCILE: 无需修复
+[2026-06-28 12:30:00] WARN: git pull 失败
+[2026-06-28 12:30:00] WARN: git pull 失败
+[2026-06-28 12:30:00] RECONCILE: 无需修复
+[2026-06-28 12:30:00] RECONCILE: 无需修复
+[2026-06-28 12:45:01] WARN: git pull 失败
+[2026-06-28 12:45:01] WARN: git pull 失败
+[2026-06-28 12:45:02] RECONCILE: 无需修复
+[2026-06-28 12:45:02] RECONCILE: 无需修复
+[2026-06-28 13:00:10] WARN: git pull 失败
+[2026-06-28 13:00:10] WARN: git pull 失败
+[2026-06-28 13:00:10] RECONCILE: 无需修复
+[2026-06-28 13:00:10] RECONCILE: 无需修复
+[2026-06-28 13:15:12] WARN: git pull 失败
+[2026-06-28 13:15:12] WARN: git pull 失败
+[2026-06-28 13:15:13] RECONCILE: 无需修复
+[2026-06-28 13:15:13] RECONCILE: 无需修复
+[2026-06-28 13:30:19] WARN: git pull 失败
+[2026-06-28 13:30:19] WARN: git pull 失败
+[2026-06-28 13:30:19] RECONCILE: 无需修复
+[2026-06-28 13:30:19] RECONCILE: 无需修复
+[2026-06-28 13:45:00] WARN: git pull 失败
+[2026-06-28 13:45:00] WARN: git pull 失败
+[2026-06-28 13:45:00] RECONCILE: 无需修复
+[2026-06-28 13:45:00] RECONCILE: 无需修复
+[2026-06-28 14:00:10] WARN: git pull 失败
+[2026-06-28 14:00:10] WARN: git pull 失败
+[2026-06-28 14:00:10] RECONCILE: 无需修复
+[2026-06-28 14:00:10] RECONCILE: 无需修复
+/bin/bash: /home/www/openlobby/.devflow/archon/reconciler.sh: No such file or directory

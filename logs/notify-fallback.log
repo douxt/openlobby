@@ -1,0 +1,107 @@
+[2026-06-27T16:28:10.995983] ⛔ openlobby: #001 宪法检查不通过（1 项）
+[2026-06-27T16:29:56.088160] 🚀 openlobby: #001 001-css-i18n-store-foundation 开始执行
+[2026-06-27T16:30:51.852911] ❌ openlobby: #001 执行失败（3 次重试，耗时 37s）
+[2026-06-27T16:32:31.809981] 🚀 openlobby: #001 001-css-i18n-store-foundation 开始执行
+[2026-06-27T17:00:24.523080] 🚀 openlobby: #001 001-css-i18n-store-foundation 开始执行
+[2026-06-27T17:01:45.067677] 🔍 *待审批 PR*
+
+Issue: `001-css-i18n-store-foundation`
+PR: 
+改动文件: issues/001-css-i18n-store-foundation.md
+[2026-06-27T17:35:27.174572] 🚀 openlobby: #001 001-css-i18n-store-foundation 开始执行
+[2026-06-27T17:36:48.391090] 🔍 *待审批 PR*
+
+Issue: `001-css-i18n-store-foundation`
+PR: 
+改动文件: issues/001-css-i18n-store-foundation.md
+[2026-06-27T19:55:23.597141] 🚀 openlobby: #001 001-css-i18n-store-foundation 开始执行
+[2026-06-27T19:56:44.872461] 🔍 *待审批 PR*
+
+Issue: `001-css-i18n-store-foundation`
+PR: 
+改动文件: issues/001-css-i18n-store-foundation.md
+[2026-06-27T22:10:19.794650] 🚀 openlobby: #003 003-sidebar-adaptation 开始执行
+[2026-06-27T22:11:36.715986] 🔍 *待审批 PR*
+
+Issue: `003-sidebar-adaptation`
+PR: 
+改动文件: docs/devflow-observability.md, issues/003-sidebar-adaptation.md
+[2026-06-27T22:20:38.667959] 🚀 openlobby: #002 002-mobile-drawer-nav 开始执行
+[2026-06-27T22:22:01.934279] 🔍 *待审批 PR*
+
+Issue: `002-mobile-drawer-nav`
+PR: 
+改动文件: issues/002-mobile-drawer-nav.md
+[2026-06-27T22:30:25.215667] 🚀 openlobby: #002 002-mobile-drawer-nav 开始执行
+[2026-06-27T22:31:45.150516] 🔍 *待审批 PR*
+
+Issue: `002-mobile-drawer-nav`
+PR: 
+改动文件: .devflow/archon/auto-execute-afk.yaml, issues/002-mobile-drawer-nav.md
+[2026-06-27T23:00:39.348263] 🚀 openlobby: #002 002-mobile-drawer-nav 开始执行
+[2026-06-27T23:09:34.816407] 🔍 *待审批 PR*
+
+Issue: `002-mobile-drawer-nav`
+PR: 
+改动文件: .devflow/archon/auto-execute-afk.yaml, issues/002-mobile-drawer-nav.md
+[2026-06-27T23:25:24.855443] 🚀 openlobby: #003 003-sidebar-adaptation 开始执行
+[2026-06-27T23:56:09.502177] 🔍 *待审批 PR*
+
+Issue: `003-sidebar-adaptation`
+PR: 
+改动文件: .devflow/archon/reconciler.sh, logs/cost.jsonl
+[2026-06-27T23:56:34.306755] 🚀 openlobby: #003 003-sidebar-adaptation 开始执行
+[2026-06-28T00:15:09.658841] 🔍 *待审批 PR*
+
+Issue: `003-sidebar-adaptation`
+PR: https://github.com/kkkkk1k1/openlobby/pull/17
+改动文件: issues/003-sidebar-adaptation.md, logs/cost.jsonl
+[2026-06-28T09:45:24.382677] ⛔ openlobby: #004 宪法检查不通过（1 项）
+[2026-06-28T09:50:21.028062] 🚀 openlobby: #004 004-app-layout-integration 开始执行
+[2026-06-28T10:07:23.132028] 🔍 *待审批 PR*
+
+Issue: `004-app-layout-integration`
+PR: 
+改动文件: issues/004-app-layout-integration.md, logs/cost.jsonl
+[2026-06-28T10:07:50.159143] 🚀 openlobby: #004 004-app-layout-integration 开始执行
+[2026-06-28T10:32:18.924339] 🔍 *待审批 PR*
+
+Issue: `004-app-layout-integration`
+PR: 
+改动文件: issues/004-app-layout-integration.md, logs/cost.jsonl
+[2026-06-28T10:32:47.892553] 🚀 openlobby: #004 004-app-layout-integration 开始执行
+[2026-06-28T10:48:42.384422] 🔍 *待审批 PR*
+
+Issue: `004-app-layout-integration`
+PR: 
+改动文件: issues/004-app-layout-integration.md, logs/cost.jsonl
+[2026-06-28T10:49:11.416159] 🚀 openlobby: #004 004-app-layout-integration 开始执行
+[2026-06-28T11:17:31.653165] 🔍 *待审批 PR*
+
+Issue: `004-app-layout-integration`
+PR: 
+改动文件: issues/004-app-layout-integration.md, logs/cost.jsonl
+[2026-06-28T11:18:03.050010] 🚀 openlobby: #004 004-app-layout-integration 开始执行
+[2026-06-28T11:34:10.320300] 🔍 *待审批 PR*
+
+Issue: `004-app-layout-integration`
+PR: 
+改动文件: issues/004-app-layout-integration.md, logs/cost.jsonl
+[2026-06-28T11:34:40.274187] 🚀 openlobby: #004 004-app-layout-integration 开始执行
+[2026-06-28T11:52:20.695890] 🔍 *待审批 PR*
+
+Issue: `004-app-layout-integration`
+PR: 
+改动文件: issues/004-app-layout-integration.md, logs/cost.jsonl
+[2026-06-28T11:52:51.514031] 🚀 openlobby: #004 004-app-layout-integration 开始执行
+[2026-06-28T12:12:47.140079] 🔍 *待审批 PR*
+
+Issue: `004-app-layout-integration`
+PR: 
+改动文件: issues/004-app-layout-integration.md, logs/cost.jsonl
+[2026-06-28T12:13:19.242117] 🚀 openlobby: #004 004-app-layout-integration 开始执行
+[2026-06-28T12:36:06.856652] 🔍 *待审批 PR*
+
+Issue: `004-app-layout-integration`
+PR: 
+改动文件: issues/004-app-layout-integration.md, logs/cost.jsonl
