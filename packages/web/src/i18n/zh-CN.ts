@@ -236,6 +236,10 @@ export const zhCNMessages = {
   'sidebar.agent.badgeTitle': 'Agent：{name}',
   'sidebar.agent.label': 'Agent',
 
+  'nav.sessions': '会话',
+  'nav.agents': 'Agent',
+  'nav.channels': '渠道',
+
   'roomHeader.agent.label': 'Agent：{name}',
   'roomHeader.agent.viewAgent': '查看 Agent',
   'roomHeader.agent.openAgentsPanel': '打开 Agents 面板',

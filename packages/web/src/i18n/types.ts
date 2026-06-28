@@ -238,6 +238,10 @@ export interface Messages {
   'sidebar.agent.badgeTitle': string;
   'sidebar.agent.label': string;
 
+  'nav.sessions': string;
+  'nav.agents': string;
+  'nav.channels': string;
+
   'roomHeader.agent.label': string;
   'roomHeader.agent.viewAgent': string;
   'roomHeader.agent.openAgentsPanel': string;

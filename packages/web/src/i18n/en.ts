@@ -236,6 +236,10 @@ export const enMessages = {
   'sidebar.agent.badgeTitle': 'Agent: {name}',
   'sidebar.agent.label': 'Agent',
 
+  'nav.sessions': 'Sessions',
+  'nav.agents': 'Agents',
+  'nav.channels': 'Channels',
+
   'roomHeader.agent.label': 'Agent: {name}',
   'roomHeader.agent.viewAgent': 'View Agent',
   'roomHeader.agent.openAgentsPanel': 'Open AgentsPanel',
