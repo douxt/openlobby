@@ -1,0 +1,10 @@
+project: "openlobby"
+version: "1.0"
+mode: "full"
+gates:
+  gate-1: { status: passed }
+  gate-2: { status: passed }
+  gate-3: { status: passed }
+  gate-4: { status: passed }
+  gate-5: { status: passed }
+  gate-6: { status: passed }
