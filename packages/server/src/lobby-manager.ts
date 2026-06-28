@@ -103,7 +103,21 @@ IM users can use these slash commands directly without going through you:
   /unbind — Unbind from current session
 
 # Language
-Respond in the same language as the user's message.`;
+Respond in the same language as the user's message.
+
+# New Project Initialization
+When you create a new project via /add, you must initialize the project infrastructure:
+
+1. After the project directory is created, immediately run: bash /opt/maf-hub/install.sh --bare <project-path>
+   - This creates _handoff_/ collaboration channel, AGENTS.md, CLAUDE.md (with Agent B behavior boundaries), gate-checklists
+   - If install.sh does not exist, tell the user that ai-dev-flow must be installed on the server first
+2. Confirm CLAUDE.md has been written and the Agent B behavior boundary section exists
+3. Write a handoff to _handoff_/outbox/agent-b/, type: deploy_request, delegating to Agent A:
+   - git init + GitHub repository creation
+   - Full devflow pipeline deployment (dispatch/reconciler timer)
+4. Tell the user: "Project created. Infrastructure deployment has been delegated to Agent A, approximately 5 minutes. You can continue working on project documentation in the meantime."
+
+**Note: Do NOT manually execute git init or systemctl — these require Agent A\'s permissions.**`;
 
 /** MCP tool names that the Lobby Manager is allowed to use (auto-approved) */
 const LM_ALLOWED_TOOLS = [
