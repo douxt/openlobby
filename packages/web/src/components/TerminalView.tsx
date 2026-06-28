@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -29,6 +29,9 @@ function getTerminalTheme(): { background: string; foreground: string; cursor: s
 
 export default function TerminalView({ sessionId }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputBufferRef = useRef('');
+  const lastCommandRef = useRef('');
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -68,6 +71,18 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
     });
 
     const inputDisposable = terminal.onData((data) => {
+      // Track input buffer for last command
+      if (data === '\r') {
+        const cmd = inputBufferRef.current.trim();
+        if (cmd) {
+          lastCommandRef.current = cmd;
+        }
+        inputBufferRef.current = '';
+      } else if (data === '\x7f') {
+        inputBufferRef.current = inputBufferRef.current.slice(0, -1);
+      } else if (data.length === 1 && data.charCodeAt(0) >= 0x20) {
+        inputBufferRef.current += data;
+      }
       wsPtyInput(sessionId, data);
     });
 
@@ -104,8 +119,25 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
   return (
     <div
       ref={containerRef}
-      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
+      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden relative"
       style={{ minHeight: 0 }}
-    />
+    >
+      {/* Copy last command — mobile only */}
+      <div className="md:hidden absolute bottom-2 right-2 z-10">
+        <button
+          onClick={() => {
+            const cmd = lastCommandRef.current;
+            if (!cmd) return;
+            navigator.clipboard.writeText(cmd).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            });
+          }}
+          className="px-3 py-1 text-xs rounded bg-surface-elevated border border-outline text-on-surface-secondary hover:text-on-surface transition-colors"
+        >
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
+    </div>
   );
 }
