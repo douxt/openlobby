@@ -137,6 +137,18 @@ interface LobbyState {
   upsertAgent: (agent: AgentDefinition) => void;
   removeAgent: (id: string) => void;
 
+  // Mobile UI state
+  drawerOpen: boolean;
+  showAgentsPanel: boolean;
+  showChannelPanel: boolean;
+  showSettingsDialog: boolean;
+  showUpdateDialog: boolean;
+  setDrawerOpen: (open: boolean) => void;
+  setShowAgentsPanel: (show: boolean) => void;
+  setShowChannelPanel: (show: boolean) => void;
+  setShowSettingsDialog: (show: boolean) => void;
+  setShowUpdateDialog: (show: boolean) => void;
+
   /** When set, the Sidebar opens the AgentsPanel; consumed and reset by the opener. */
   agentsPanelRequest: { highlightId?: string } | null;
   openAgentsPanel: (highlightId?: string) => void;
@@ -239,6 +251,13 @@ export const useLobbyStore = create<LobbyState>((set) => ({
 
   amAvailable: false,
   amSessionId: null,
+
+  // Mobile UI defaults
+  drawerOpen: false,
+  showAgentsPanel: false,
+  showChannelPanel: false,
+  showSettingsDialog: false,
+  showUpdateDialog: false,
 
   channelProviders: [],
   channelBindings: [],
@@ -524,6 +543,13 @@ export const useLobbyStore = create<LobbyState>((set) => ({
   // Agent Manager actions
   setAmAvailable: (available) => set({ amAvailable: available }),
   setAmSessionId: (id) => set({ amSessionId: id }),
+
+  // Mobile UI setters
+  setDrawerOpen: (open) => set({ drawerOpen: open }),
+  setShowAgentsPanel: (show) => set({ showAgentsPanel: show }),
+  setShowChannelPanel: (show) => set({ showChannelPanel: show }),
+  setShowSettingsDialog: (show) => set({ showSettingsDialog: show }),
+  setShowUpdateDialog: (show) => set({ showUpdateDialog: show }),
 
   // Channel actions
   setChannelProviders: (providers) => set({ channelProviders: providers }),
