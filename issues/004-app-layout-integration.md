@@ -1,7 +1,7 @@
 ---
 type: AFK
 estimate: 1d
-effort: medium
+effort: small
 status: ready
 blocked_by: ["002", "003"]
 needs_llm: false
