@@ -124,3 +124,30 @@ in_review → 人发现代码在 archon 分支 → 手动 cherry-pick →
 - [ ] `--from` 修复合并到 ai-dev-flow-server 主分支
 - [ ] 跑通全部 5 条 issue（当前到 #004）
 - [ ] 多个项目并行测试（验证架构的横向扩展能力）
+
+## 八、Agent B 协作框架兼容性问题（2026-06-28）
+
+项目在 Phase 7 重构为 Agent A/B 协作框架，Agent B 行为受硬性约束，引出以下问题：
+
+### handoff bootstrap 死锁
+
+```
+Agent B 遇阻 → 需写 _handoff/outbox/agent-b/ 委托 A
+  → git push → pre-push hook 拦截：_handoff/ 是受保护路径
+  → Agent B 无法推送 handoff
+
+结果：handoff 文件已创建在本地，A 无法收到
+```
+
+### 建议修复
+
+| # | 修复 | 位置 |
+|---|------|------|
+| 1 | 将 `_handoff/outbox/agent-b/` 加入 Agent B 白名单 | pre-push hook 或 AGENTS.md |
+| 2 | 或规定：Agent A 每 N 分钟主动 `git pull` 检查本地未推送的 handoff | dispatch.sh / reconcile.sh |
+| 3 | 或使用独立通道（Telegram / Webhook）发送 handoff 通知 | notify.py 集成 |
+
+### 当前阻塞
+
+- [ ] `_handoff/outbox/agent-b/openlobby-2026-06-28-01.md` 已写入本地，需 A 拉取
+- [ ] 管线基础设施恢复被此阻塞
