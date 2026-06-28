@@ -151,9 +151,6 @@ export const enMessages = {
   'discover.importing': 'Importing...',
   'discover.alreadyImported': 'Already imported',
 
-  'nav.sessions': 'Sessions',
-  'nav.agents': 'Agents',
-  'nav.channels': 'Channels',
 
   'newSession.title': 'New Session',
   'newSession.agent': 'Agent',

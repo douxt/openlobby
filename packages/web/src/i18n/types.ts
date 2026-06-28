@@ -153,9 +153,6 @@ export interface Messages {
   'discover.importing': string;
   'discover.alreadyImported': string;
 
-  'nav.sessions': string;
-  'nav.agents': string;
-  'nav.channels': string;
 
   'newSession.title': string;
   'newSession.agent': string;
