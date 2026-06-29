@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -101,11 +101,32 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
     };
   }, [sessionId]);
 
+  // AC8: copy last terminal command (mobile only)
+  const handleCopyCommand = useCallback(() => {
+    const cached = terminalCache.get(sessionId);
+    if (!cached) return;
+    const buffer = cached.terminal.buffer.active;
+    const lines: string[] = [];
+    for (let y = 0; y < buffer.length; y++) {
+      const line = buffer.getLine(y);
+      if (line) lines.push(line.translateToString().trimEnd());
+    }
+    const text = lines.join('\n').trim();
+    if (text) navigator.clipboard.writeText(text).catch(() => {});
+  }, [sessionId]);
+
   return (
     <div
       ref={containerRef}
-      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
+      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden relative"
       style={{ minHeight: 0 }}
-    />
+    >
+      <button
+        onClick={handleCopyCommand}
+        className="md:hidden absolute top-2 right-2 z-10 px-2 py-1 rounded text-xs bg-surface-elevated border border-outline text-on-surface-secondary hover:text-on-surface transition-colors"
+      >
+        Copy
+      </button>
+    </div>
   );
 }
