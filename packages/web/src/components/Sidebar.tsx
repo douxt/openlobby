@@ -4,6 +4,7 @@ import type { SessionSummaryData } from '../stores/lobby-store';
 import { wsRequestSessionHistory, wsDiscoverSessions, wsPinSession, wsRenameSession } from '../hooks/useWebSocket';
 import { useThemeContext } from '../contexts/ThemeContext';
 import { useI18nContext } from '../contexts/I18nContext';
+import { useVersionCheck } from '../hooks/useVersionCheck';
 import type { Theme } from '../hooks/useTheme';
 
 const APP_VERSION = __APP_VERSION__;

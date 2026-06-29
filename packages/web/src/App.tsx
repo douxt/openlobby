@@ -63,6 +63,7 @@ export default function App() {
   const setShowChannelPanel = useLobbyStore((s) => s.setShowChannelPanel);
   const setShowAgentsPanel = useLobbyStore((s) => s.setShowAgentsPanel);
   const setShowSettingsDialog = useLobbyStore((s) => s.setShowSettingsDialog);
+  const setShowUpdateDialog = useLobbyStore((s) => s.setShowUpdateDialog);
   const agentsPanelRequest = useLobbyStore((s) => s.agentsPanelRequest);
   const dismissAgentsPanel = useLobbyStore((s) => s.dismissAgentsPanel);
   const versionInfo = useVersionCheck();
