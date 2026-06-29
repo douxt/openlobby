@@ -63,7 +63,6 @@ function SessionCard({
   const isPinned = session.pinned ?? false;
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(session.displayName);
-  const [isHovered, setIsHovered] = useState(false);
 
   const handleRenameConfirm = () => {
     const trimmed = editName.trim();
@@ -81,9 +80,7 @@ function SessionCard({
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors relative ${
+      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors relative group ${
         isActive
           ? 'bg-[var(--color-sidebar-active)] border-l-2 border-primary'
           : isPinned
@@ -120,29 +117,29 @@ function SessionCard({
             <span className="text-sm font-medium text-on-surface truncate">
               {session.displayName}
             </span>
-            {isHovered && (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditName(session.displayName);
-                  setIsEditing(true);
-                }}
-                className="shrink-0 p-0.5 rounded text-xs text-on-surface-muted hover:text-on-surface cursor-pointer transition-colors"
-                title={t('sidebar.rename')}
-              >
-                ✏️
-              </span>
-            )}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditName(session.displayName);
+                setIsEditing(true);
+              }}
+              className="shrink-0 p-0.5 rounded text-xs text-on-surface-muted hover:text-on-surface cursor-pointer transition-colors block md:hidden md:group-hover:block"
+              title={t('sidebar.rename')}
+            >
+              ✏️
+            </span>
           </>
         )}
         <span className="flex-1" />
-        {(isHovered || isPinned) && !isEditing && (
+        {!isEditing && (
           <span
             onClick={(e) => {
               e.stopPropagation();
               onPin(!isPinned);
             }}
-            className={`shrink-0 p-0.5 rounded text-xs cursor-pointer transition-colors ${
+            className={`shrink-0 p-0.5 rounded text-xs cursor-pointer transition-colors block ${
+              isPinned ? '' : 'md:hidden'
+            } md:group-hover:block ${
               isPinned
                 ? 'text-primary hover:text-primary-hover'
                 : 'text-on-surface-muted hover:text-on-surface'
@@ -195,22 +192,30 @@ function ThemeIcon({ theme }: { theme: Theme }) {
   return <span>💻</span>;
 }
 
-export default function Sidebar() {
+interface SidebarProps {
+  onSessionSelect?: (sessionId: string) => void;
+}
+
+export default function Sidebar({ onSessionSelect }: SidebarProps = {}) {
   const sessions = useLobbyStore((s) => s.sessions);
   const activeSessionId = useLobbyStore((s) => s.activeSessionId);
   const connected = useLobbyStore((s) => s.connected);
   const setActiveSession = useLobbyStore((s) => s.setActiveSession);
   const showDiscoverDialog = useLobbyStore((s) => s.showDiscoverDialog);
   const setShowDiscoverDialog = useLobbyStore((s) => s.setShowDiscoverDialog);
+  const showUpdateDialog = useLobbyStore((s) => s.showUpdateDialog);
+  const setShowUpdateDialog = useLobbyStore((s) => s.setShowUpdateDialog);
+  const showChannelPanel = useLobbyStore((s) => s.showChannelPanel);
+  const setShowChannelPanel = useLobbyStore((s) => s.setShowChannelPanel);
+  const showAgentsPanel = useLobbyStore((s) => s.showAgentsPanel);
+  const setShowAgentsPanel = useLobbyStore((s) => s.setShowAgentsPanel);
+  const showSettingsDialog = useLobbyStore((s) => s.showSettingsDialog);
+  const setShowSettingsDialog = useLobbyStore((s) => s.setShowSettingsDialog);
   const lmAvailable = useLobbyStore((s) => s.lmAvailable);
   const lmSessionId = useLobbyStore((s) => s.lmSessionId);
   const amAvailable = useLobbyStore((s) => s.amAvailable);
   const amSessionId = useLobbyStore((s) => s.amSessionId);
   const versionInfo = useVersionCheck();
-  const [showUpdateDialog, setShowUpdateDialog] = useState(false);
-  const [showChannelPanel, setShowChannelPanel] = useState(false);
-  const [showAgentsPanel, setShowAgentsPanel] = useState(false);
-  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
   const agentsCount = useLobbyStore((s) => s.agents.length);
   const agentsPanelRequest = useLobbyStore((s) => s.agentsPanelRequest);
   const dismissAgentsPanel = useLobbyStore((s) => s.dismissAgentsPanel);
@@ -241,6 +246,7 @@ export default function Sidebar() {
   const handleSelectSession = (id: string) => {
     setActiveSession(id);
     wsRequestSessionHistory(id);
+    onSessionSelect?.(id);
   };
 
   const cycleTheme = () => {
@@ -261,7 +267,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <aside className="w-72 bg-surface-secondary border-r border-outline flex flex-col h-full">
+      <aside className="w-full md:w-72 bg-surface-secondary border-r border-outline flex flex-col h-full">
         <div className="px-4 py-3 border-b border-outline flex items-center justify-between">
           <h1 className="text-lg font-bold text-on-surface">OpenLobby</h1>
           <div className="flex items-center gap-1.5">
