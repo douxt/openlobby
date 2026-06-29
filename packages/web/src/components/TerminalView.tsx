@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -29,6 +29,9 @@ function getTerminalTheme(): { background: string; foreground: string; cursor: s
 
 export default function TerminalView({ sessionId }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+  const lastCommandRef = useRef('');
+  const cmdBufferRef = useRef('');
 
   useEffect(() => {
     const container = containerRef.current;
@@ -69,6 +72,15 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
 
     const inputDisposable = terminal.onData((data) => {
       wsPtyInput(sessionId, data);
+
+      // Track last command for copy button
+      if (data === '\r' || data === '\n') {
+        const line = cmdBufferRef.current.trim();
+        if (line) lastCommandRef.current = line;
+        cmdBufferRef.current = '';
+      } else {
+        cmdBufferRef.current += data;
+      }
     });
 
     const store = useLobbyStore.getState();
@@ -101,11 +113,32 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
     };
   }, [sessionId]);
 
+  const handleCopyLastCommand = async () => {
+    if (!lastCommandRef.current) return;
+    try {
+      await navigator.clipboard.writeText(lastCommandRef.current);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard API may fail in insecure contexts
+    }
+  };
+
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
-      style={{ minHeight: 0 }}
-    />
+    <div className="flex-1 flex flex-col relative" style={{ minHeight: 0 }}>
+      <div
+        ref={containerRef}
+        className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
+        style={{ minHeight: 0 }}
+      />
+      <button
+        onClick={handleCopyLastCommand}
+        disabled={!lastCommandRef.current}
+        className="md:hidden absolute bottom-2 right-2 px-2.5 py-1.5 rounded text-xs font-medium bg-surface-elevated text-on-surface-secondary hover:text-on-surface border border-outline transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        title="Copy last command"
+      >
+        {copied ? 'Copied!' : 'Copy cmd'}
+      </button>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 ---
+pr: ["https://github.com/douxt/openlobby/pull/26"]
 type: AFK
 estimate: 1d
 effort: small
@@ -11,6 +12,7 @@ needs_docker: false
 test_files:
   - packages/web/src/__tests__/App.test.tsx
 ---
+pr: ["https://github.com/douxt/openlobby/pull/26"]
 
 # #004 — App.tsx 布局重构 + 集成
 
