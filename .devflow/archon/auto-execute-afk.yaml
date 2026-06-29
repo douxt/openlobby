@@ -61,7 +61,7 @@ nodes:
   - id: validate
     depends_on: [ac-verify]
     bash: |
-      cd $ARCHON_WORKSPACE
+      cd $PWD
       TEST_CMD=$(grep -E '^\s+test_command:' .devflow/config.yaml 2>/dev/null | awk '{print $2}' | tr -d '"'"'" || echo "npm test")
       eval "$TEST_CMD" 2>&1 | tail -30
 
@@ -75,7 +75,7 @@ nodes:
   - id: cross-review
     depends_on: [validate]
     bash: |
-      cd $ARCHON_WORKSPACE
+      cd $PWD
       CROSS=$(grep -E '^\s+cross_review:' .devflow/config.yaml 2>/dev/null | awk '{print $2}' || echo "false")
       if [ "$CROSS" != "true" ]; then
         echo "CROSS_REVIEW_SKIPPED: config.yaml 中 cross_review=false"
@@ -124,7 +124,7 @@ nodes:
     bash: |
       ISSUE_FILE="$ARGUMENTS"
       BRANCH=$(git rev-parse --abbrev-ref HEAD)
-      PR_URL=$(grep -oP 'PR_URL:\s*\Khttps://[^\s]+' "$ARCHON_WORKSPACE/archon_output.log" 2>/dev/null || echo "")
+      PR_URL=$(grep -oP 'PR_URL:\s*\Khttps://[^\s]+' "archon_output.log" 2>/dev/null || echo "")
       if [ -n "$PR_URL" ]; then
         if grep -q '^pr:' "$ISSUE_FILE"; then
           sed -i "s|^pr:.*|pr: [\"$PR_URL\"]|" "$ISSUE_FILE"
@@ -146,7 +146,7 @@ nodes:
     depends_on: [mark-in-review]
     bash: |
       set -euo pipefail
-      PR_URL=$(grep -oP 'PR_URL:\s*\Khttps://[^\s]+' "$ARCHON_WORKSPACE/archon_output.log" 2>/dev/null || echo "")
+      PR_URL=$(grep -oP 'PR_URL:\s*\Khttps://[^\s]+' "archon_output.log" 2>/dev/null || echo "")
       if [ -z "$PR_URL" ]; then
         echo "AUTO_MERGE_SKIP: no PR URL"
         exit 0
@@ -184,7 +184,7 @@ nodes:
       ISSUE_SLUG=$(basename "$ISSUE_FILE" .md)
       MAIN=$(git worktree list --porcelain | grep "^worktree " | head -1 | cut -d" " -f2)
       SUMMARY="$MAIN/issues/${ISSUE_SLUG}-summary.md"
-      LOG="$ARCHON_WORKSPACE/archon_output.log"
+      LOG="archon_output.log"
 
       PR_URL=$(grep -oP 'PR_URL:\s*\Khttps://[^\s]+' "$LOG" 2>/dev/null || echo "N/A")
       MERGE_ACTION=$(grep -oP 'AUTO_MERGE_\K(SKIP|DONE|FAIL).*' "$LOG" 2>/dev/null | tail -1 || echo "UNKNOWN")
