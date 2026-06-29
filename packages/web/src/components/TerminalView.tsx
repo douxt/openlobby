@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -101,11 +101,35 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
     };
   }, [sessionId]);
 
+  // AC8: copy last terminal command (mobile)
+  const handleCopyLastCommand = useCallback(() => {
+    const cached = terminalCache.get(sessionId);
+    if (!cached) return;
+    const buffer = cached.terminal.buffer.active;
+    for (let i = buffer.length - 1; i >= 0; i--) {
+      const line = buffer.getLine(i);
+      if (line) {
+        const text = line.translateToString().trim();
+        if (text) {
+          navigator.clipboard.writeText(text).catch(() => {});
+          return;
+        }
+      }
+    }
+  }, [sessionId]);
+
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
-      style={{ minHeight: 0 }}
-    />
+    <div className="relative flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+      <div
+        ref={containerRef}
+        className="absolute inset-0 bg-[var(--color-terminal-bg)]"
+      />
+      <button
+        onClick={handleCopyLastCommand}
+        className="md:hidden absolute bottom-2 right-2 z-10 px-2 py-1 rounded text-xs bg-surface-elevated/80 text-on-surface-secondary hover:text-on-surface border border-outline"
+      >
+        Copy
+      </button>
+    </div>
   );
 }

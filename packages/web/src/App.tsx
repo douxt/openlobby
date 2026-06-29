@@ -1,15 +1,23 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useWebSocketInit, wsSendMessage, wsRespondControl, wsConfigureSession, wsRecoverSession } from './hooks/useWebSocket';
 import { useLobbyStore } from './stores/lobby-store';
 import { useTheme } from './hooks/useTheme';
 import { ThemeContext } from './contexts/ThemeContext';
 import { I18nContext, useI18nContext } from './contexts/I18nContext';
 import { useI18n } from './hooks/useI18n';
+import { useVersionCheck } from './hooks/useVersionCheck';
 import Sidebar from './components/Sidebar';
 import RoomHeader from './components/RoomHeader';
 import MessageList from './components/MessageList';
 import MessageInput from './components/MessageInput';
 import TerminalView from './components/TerminalView';
+import { MobileNav } from './components/MobileNav';
+import { MobileDrawer } from './components/MobileDrawer';
+import DiscoverDialog from './components/DiscoverDialog';
+import ChannelManagePanel from './components/ChannelManagePanel';
+import AgentsPanel from './components/AgentsPanel';
+import GlobalSettingsDialog from './components/GlobalSettingsDialog';
+import { UpdateDialog } from './components/UpdateDialog';
 
 const DEV_BACKEND_HOST =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -26,6 +34,7 @@ export default function App() {
   useWebSocketInit(WS_URL);
   const themeValue = useTheme();
   const i18nValue = useI18n();
+  const versionInfo = useVersionCheck();
 
   const activeSessionId = useLobbyStore((s) => s.activeSessionId);
   const connected = useLobbyStore((s) => s.connected);
@@ -41,6 +50,22 @@ export default function App() {
     s.activeSessionId ? (s.viewModeBySession[s.activeSessionId] ?? 'im') : 'im',
   );
 
+  // Dialog state
+  const drawerOpen = useLobbyStore((s) => s.drawerOpen);
+  const setDrawerOpen = useLobbyStore((s) => s.setDrawerOpen);
+  const showDiscoverDialog = useLobbyStore((s) => s.showDiscoverDialog);
+  const setShowDiscoverDialog = useLobbyStore((s) => s.setShowDiscoverDialog);
+  const showChannelPanel = useLobbyStore((s) => s.showChannelPanel);
+  const setShowChannelPanel = useLobbyStore((s) => s.setShowChannelPanel);
+  const showAgentsPanel = useLobbyStore((s) => s.showAgentsPanel);
+  const setShowAgentsPanel = useLobbyStore((s) => s.setShowAgentsPanel);
+  const showSettingsDialog = useLobbyStore((s) => s.showSettingsDialog);
+  const setShowSettingsDialog = useLobbyStore((s) => s.setShowSettingsDialog);
+  const showUpdateDialog = useLobbyStore((s) => s.showUpdateDialog);
+  const setShowUpdateDialog = useLobbyStore((s) => s.setShowUpdateDialog);
+  const agentsPanelRequest = useLobbyStore((s) => s.agentsPanelRequest);
+  const dismissAgentsPanel = useLobbyStore((s) => s.dismissAgentsPanel);
+
   const handleChoiceSelect = useCallback(
     (label: string) => {
       if (!activeSessionId) return;
@@ -54,13 +79,52 @@ export default function App() {
     [activeSessionId],
   );
 
+  // AC5: matchMedia >=768px auto-close drawer
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 768px)');
+    const handler = () => {
+      if (mql.matches) {
+        setDrawerOpen(false);
+      }
+    };
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, [setDrawerOpen]);
+
+  // AC4: drawer session select → close
+  const handleDrawerClose = useCallback(() => {
+    setDrawerOpen(false);
+  }, [setDrawerOpen]);
+
   return (
     <ThemeContext.Provider value={themeValue}>
       <I18nContext.Provider value={i18nValue}>
-        <div className="h-screen flex bg-surface text-on-surface">
-          <Sidebar />
+        {/* AC10: h-dvh + flex-col/md:flex-row */}
+        <div className="h-screen h-dvh flex flex-col md:flex-row bg-surface text-on-surface">
+          {/* AC1: Desktop sidebar */}
+          <div className="hidden md:flex md:w-72 flex-shrink-0">
+            <Sidebar onSessionSelect={handleDrawerClose} />
+          </div>
 
-          <main className="flex-1 flex flex-col min-w-0">
+          {/* AC3: Mobile drawer */}
+          <MobileDrawer open={drawerOpen} onClose={handleDrawerClose}>
+            <Sidebar onSessionSelect={handleDrawerClose} />
+          </MobileDrawer>
+
+          {/* AC2+AC10: main content with mobile bottom nav padding */}
+          <main className="flex-1 flex flex-col min-w-0 pb-[var(--mobile-nav-height)] md:pb-0">
+            {/* AC2: Mobile top bar */}
+            <div className="md:hidden flex items-center gap-2 px-4 py-2 border-b border-outline bg-surface-secondary">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="p-1 rounded hover:bg-[var(--color-sidebar-hover)] text-on-surface-secondary"
+                aria-label="Open menu"
+              >
+                &#x2630;
+              </button>
+              <h1 className="text-lg font-bold text-on-surface">OpenLobby</h1>
+            </div>
+
             <RoomHeader />
 
             {activeSessionId ? (
@@ -93,7 +157,8 @@ export default function App() {
                 )}
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center">
+              /* AC6: Mobile empty state */
+              <div className="flex-1 flex items-center justify-center px-4">
                 <div className="text-center text-on-surface-muted">
                   <p className="text-lg mb-2">{i18nValue.t('app.emptyStateTitle')}</p>
                   <p className="text-sm">{i18nValue.t('app.emptyStateHint')}</p>
@@ -101,6 +166,36 @@ export default function App() {
               </div>
             )}
           </main>
+
+          {/* AC2: Mobile bottom nav */}
+          <MobileNav />
+
+          {/* AC7: 5 dialogs from App.tsx */}
+          {showDiscoverDialog && (
+            <DiscoverDialog onClose={() => setShowDiscoverDialog(false)} />
+          )}
+          {showChannelPanel && (
+            <ChannelManagePanel onClose={() => setShowChannelPanel(false)} />
+          )}
+          {showAgentsPanel && (
+            <AgentsPanel
+              highlightId={agentsPanelRequest?.highlightId}
+              onClose={() => {
+                setShowAgentsPanel(false);
+                dismissAgentsPanel();
+              }}
+            />
+          )}
+          {showSettingsDialog && (
+            <GlobalSettingsDialog onClose={() => setShowSettingsDialog(false)} />
+          )}
+          {showUpdateDialog && versionInfo.latest && (
+            <UpdateDialog
+              latestVersion={versionInfo.latest}
+              installMode={versionInfo.installMode}
+              onClose={() => setShowUpdateDialog(false)}
+            />
+          )}
         </div>
       </I18nContext.Provider>
     </ThemeContext.Provider>
