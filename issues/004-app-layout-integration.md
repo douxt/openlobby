@@ -1,8 +1,9 @@
 ---
+pr: ["https://github.com/douxt/openlobby/pull/24"]
 type: AFK
 estimate: 1d
 effort: small
-status: in_progress
+status: in_review
 blocked_by: ["002", "003"]
 needs_llm: false
 needs_vision: false
@@ -11,6 +12,7 @@ needs_docker: false
 test_files:
   - packages/web/src/__tests__/App.test.tsx
 ---
+pr: ["https://github.com/douxt/openlobby/pull/24"]
 
 # #004 — App.tsx 布局重构 + 集成
 
