@@ -1,5 +1,5 @@
 # Summary: 004-app-layout-integration
-# created: 2026-06-29T20:12:14+08:00
+# created: 2026-06-29T20:38:14+08:00
 # workflow: auto-execute-afk
 
 ## Review Results
@@ -15,7 +15,7 @@
 
 | Field | Value |
 |-------|-------|
-| Layer | APP |
+| Layer | MIXED |
 | Action | UNKNOWN |
 | PR | N/A |
 
