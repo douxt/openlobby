@@ -38,6 +38,7 @@ export const enMessages = {
   'app.recoverToIdle': 'Recover to Idle',
   'app.emptyStateTitle': 'Select a session or create a new one',
   'app.emptyStateHint': 'Click "+ Import" in the sidebar to get started',
+  'app.openSessions': 'Open Sessions',
   'app.sessionEndedHint': 'Session has ended. Create or import a session to continue.',
 
   'nav.sessions': 'Sessions',
