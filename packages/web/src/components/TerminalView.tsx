@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -29,6 +29,9 @@ function getTerminalTheme(): { background: string; foreground: string; cursor: s
 
 export default function TerminalView({ sessionId }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+  const session = useLobbyStore((s) => s.sessions[sessionId]);
+  const resumeCommand = session?.resumeCommand;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -102,10 +105,24 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
   }, [sessionId]);
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
-      style={{ minHeight: 0 }}
-    />
+    <div className="flex-1 relative overflow-hidden" style={{ minHeight: 0 }}>
+      <div
+        ref={containerRef}
+        className="absolute inset-0 bg-[var(--color-terminal-bg)]"
+      />
+      {/* AC8: Copy button – visible on mobile only */}
+      {resumeCommand && (
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(resumeCommand);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          }}
+          className="md:hidden absolute top-2 right-2 z-10 px-2 py-1 text-xs rounded bg-surface text-on-surface border border-outline hover:bg-surface-secondary transition-colors"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      )}
+    </div>
   );
 }
