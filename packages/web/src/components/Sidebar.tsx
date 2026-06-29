@@ -63,7 +63,6 @@ function SessionCard({
   const isPinned = session.pinned ?? false;
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(session.displayName);
-  const [isHovered, setIsHovered] = useState(false);
 
   const handleRenameConfirm = () => {
     const trimmed = editName.trim();
@@ -81,9 +80,7 @@ function SessionCard({
   return (
     <button
       onClick={onClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors relative ${
+      className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors relative group ${
         isActive
           ? 'bg-[var(--color-sidebar-active)] border-l-2 border-primary'
           : isPinned
@@ -120,29 +117,29 @@ function SessionCard({
             <span className="text-sm font-medium text-on-surface truncate">
               {session.displayName}
             </span>
-            {isHovered && (
-              <span
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setEditName(session.displayName);
-                  setIsEditing(true);
-                }}
-                className="shrink-0 p-0.5 rounded text-xs text-on-surface-muted hover:text-on-surface cursor-pointer transition-colors"
-                title={t('sidebar.rename')}
-              >
-                ✏️
-              </span>
-            )}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditName(session.displayName);
+                setIsEditing(true);
+              }}
+              className="shrink-0 p-0.5 rounded text-xs text-on-surface-muted hover:text-on-surface cursor-pointer transition-colors block md:hidden md:group-hover:block"
+              title={t('sidebar.rename')}
+            >
+              ✏️
+            </span>
           </>
         )}
         <span className="flex-1" />
-        {(isHovered || isPinned) && !isEditing && (
+        {!isEditing && (
           <span
             onClick={(e) => {
               e.stopPropagation();
               onPin(!isPinned);
             }}
-            className={`shrink-0 p-0.5 rounded text-xs cursor-pointer transition-colors ${
+            className={`shrink-0 p-0.5 rounded text-xs cursor-pointer transition-colors block ${
+              isPinned ? '' : 'md:hidden'
+            } md:group-hover:block ${
               isPinned
                 ? 'text-primary hover:text-primary-hover'
                 : 'text-on-surface-muted hover:text-on-surface'
