@@ -300,4 +300,6 @@ export const enMessages = {
   'agentEdit.buttons.save': 'Save',
   'agentEdit.buttons.create': 'Create',
   'agentEdit.tagsRemoveAria': 'Remove {value}',
+
+  'terminal.copyLastCommand': 'Copy',
 } satisfies Messages;

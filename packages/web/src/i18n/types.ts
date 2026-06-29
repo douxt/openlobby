@@ -302,6 +302,8 @@ export interface Messages {
   'agentEdit.buttons.save': string;
   'agentEdit.buttons.create': string;
   'agentEdit.tagsRemoveAria': string;
+
+  'terminal.copyLastCommand': string;
 }
 
 export type MessageKey = keyof Messages;

@@ -300,4 +300,6 @@ export const zhCNMessages = {
   'agentEdit.buttons.save': '保存',
   'agentEdit.buttons.create': '创建',
   'agentEdit.tagsRemoveAria': '移除 {value}',
+
+  'terminal.copyLastCommand': '复制',
 } satisfies Messages;

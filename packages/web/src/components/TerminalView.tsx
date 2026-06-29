@@ -1,9 +1,10 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { useLobbyStore } from '../stores/lobby-store';
 import { wsOpenPty, wsPtyInput, wsPtyResize } from '../hooks/useWebSocket';
+import { useI18nContext } from '../contexts/I18nContext';
 
 interface TerminalViewProps {
   sessionId: string;
@@ -101,11 +102,41 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
     };
   }, [sessionId]);
 
+  const { t } = useI18nContext();
+
+  // AC8: Copy last terminal command (mobile only)
+  const handleCopyLastCommand = useCallback(() => {
+    const cached = terminalCache.get(sessionId);
+    if (!cached) return;
+    const lines: string[] = [];
+    const buffer = cached.terminal.buffer.active;
+    for (let i = 0; i < buffer.length; i++) {
+      const line = buffer.getLine(i);
+      if (line) {
+        lines.push(line.translateToString());
+      }
+    }
+    const text = lines.join('\n').trim();
+    if (text) {
+      navigator.clipboard.writeText(text).catch(() => {
+        // Ignore clipboard errors in non-secure contexts
+      });
+    }
+  }, [sessionId]);
+
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
-      style={{ minHeight: 0 }}
-    />
+    <div className="relative flex-1 min-h-0">
+      <div
+        ref={containerRef}
+        className="absolute inset-0 bg-[var(--color-terminal-bg)]"
+      />
+      <button
+        onClick={handleCopyLastCommand}
+        className="md:hidden absolute bottom-2 right-2 z-10 px-2 py-1 rounded text-xs bg-surface-elevated text-on-surface-secondary border border-outline hover:text-on-surface transition-colors"
+        data-testid="terminal-copy-btn"
+      >
+        {t('terminal.copyLastCommand')}
+      </button>
+    </div>
   );
 }
