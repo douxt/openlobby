@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useWebSocketInit, wsSendMessage, wsRespondControl, wsConfigureSession, wsRecoverSession } from './hooks/useWebSocket';
 import { useLobbyStore } from './stores/lobby-store';
 import { useTheme } from './hooks/useTheme';
@@ -6,10 +6,18 @@ import { ThemeContext } from './contexts/ThemeContext';
 import { I18nContext, useI18nContext } from './contexts/I18nContext';
 import { useI18n } from './hooks/useI18n';
 import Sidebar from './components/Sidebar';
+import { MobileDrawer } from './components/MobileDrawer';
+import { MobileNav } from './components/MobileNav';
 import RoomHeader from './components/RoomHeader';
 import MessageList from './components/MessageList';
 import MessageInput from './components/MessageInput';
 import TerminalView from './components/TerminalView';
+import AgentsPanel from './components/AgentsPanel';
+import ChannelManagePanel from './components/ChannelManagePanel';
+import GlobalSettingsDialog from './components/GlobalSettingsDialog';
+import DiscoverDialog from './components/DiscoverDialog';
+import { UpdateDialog } from './components/UpdateDialog';
+import { useVersionCheck } from './hooks/useVersionCheck';
 
 const DEV_BACKEND_HOST =
   window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -41,6 +49,51 @@ export default function App() {
     s.activeSessionId ? (s.viewModeBySession[s.activeSessionId] ?? 'im') : 'im',
   );
 
+  // Dialog state from store — lifted from Sidebar
+  const drawerOpen = useLobbyStore((s) => s.drawerOpen);
+  const setDrawerOpen = useLobbyStore((s) => s.setDrawerOpen);
+  const showAgentsPanel = useLobbyStore((s) => s.showAgentsPanel);
+  const setShowAgentsPanel = useLobbyStore((s) => s.setShowAgentsPanel);
+  const showChannelPanel = useLobbyStore((s) => s.showChannelPanel);
+  const setShowChannelPanel = useLobbyStore((s) => s.setShowChannelPanel);
+  const showSettingsDialog = useLobbyStore((s) => s.showSettingsDialog);
+  const setShowSettingsDialog = useLobbyStore((s) => s.setShowSettingsDialog);
+  const showDiscoverDialog = useLobbyStore((s) => s.showDiscoverDialog);
+  const setShowDiscoverDialog = useLobbyStore((s) => s.setShowDiscoverDialog);
+  const showUpdateDialog = useLobbyStore((s) => s.showUpdateDialog);
+  const setShowUpdateDialog = useLobbyStore((s) => s.setShowUpdateDialog);
+  const agentsPanelRequest = useLobbyStore((s) => s.agentsPanelRequest);
+  const dismissAgentsPanel = useLobbyStore((s) => s.dismissAgentsPanel);
+  const versionInfo = useVersionCheck();
+
+  // MatchMedia: >=768px → auto-close drawer, ensure sidebar visible
+  const drawerClose = useCallback(() => setDrawerOpen(false), [setDrawerOpen]);
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 768px)');
+    const handler = (e: MediaQueryListEvent) => {
+      if (e.matches) setDrawerOpen(false);
+    };
+    // Initial sync
+    if (mql.matches) setDrawerOpen(false);
+    mql.addEventListener('change', handler);
+    return () => mql.removeEventListener('change', handler);
+  }, [setDrawerOpen]);
+
+  // Auto-open agents panel on external request
+  useEffect(() => {
+    if (agentsPanelRequest) setShowAgentsPanel(true);
+  }, [agentsPanelRequest, setShowAgentsPanel]);
+
+  // Stable onClose for MobileDrawer
+  const handleDrawerClose = useCallback(() => {
+    setDrawerOpen(false);
+  }, [setDrawerOpen]);
+
+  // Close drawer when a session is selected from drawer
+  const handleSessionSelect = useCallback((_sessionId: string) => {
+    setDrawerOpen(false);
+  }, [setDrawerOpen]);
+
   const handleChoiceSelect = useCallback(
     (label: string) => {
       if (!activeSessionId) return;
@@ -57,10 +110,30 @@ export default function App() {
   return (
     <ThemeContext.Provider value={themeValue}>
       <I18nContext.Provider value={i18nValue}>
-        <div className="h-screen flex bg-surface text-on-surface">
-          <Sidebar />
+        <div className="h-screen h-dvh flex flex-col md:flex-row bg-surface text-on-surface">
+          {/* Desktop sidebar */}
+          <div className="hidden md:flex md:w-72 shrink-0">
+            <Sidebar onSessionSelect={handleSessionSelect} />
+          </div>
 
-          <main className="flex-1 flex flex-col min-w-0">
+          {/* Mobile drawer */}
+          <MobileDrawer open={drawerOpen} onClose={handleDrawerClose}>
+            <Sidebar onSessionSelect={handleSessionSelect} />
+          </MobileDrawer>
+
+          <main className="flex-1 flex flex-col min-w-0 pb-mobile-nav md:pb-0">
+            {/* Mobile top bar */}
+            <div className="md:hidden flex items-center gap-2 px-4 py-2 border-b border-outline bg-surface-secondary">
+              <button
+                onClick={() => setDrawerOpen(true)}
+                className="text-on-surface-secondary hover:text-on-surface"
+                aria-label="Open menu"
+              >
+                &#9776;
+              </button>
+              <h1 className="text-sm font-semibold text-on-surface">OpenLobby</h1>
+            </div>
+
             <RoomHeader />
 
             {activeSessionId ? (
@@ -93,17 +166,54 @@ export default function App() {
                 )}
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center text-on-surface-muted">
-                  <p className="text-lg mb-2">{i18nValue.t('app.emptyStateTitle')}</p>
-                  <p className="text-sm">{i18nValue.t('app.emptyStateHint')}</p>
-                </div>
-              </div>
+              <MobileEmptyState />
             )}
           </main>
+
+          {/* Mobile bottom nav */}
+          <MobileNav />
+
+          {/* Dialogs lifted from Sidebar — triggered by both Sidebar and MobileNav */}
+          {showDiscoverDialog && (
+            <DiscoverDialog onClose={() => setShowDiscoverDialog(false)} />
+          )}
+          {showChannelPanel && (
+            <ChannelManagePanel onClose={() => setShowChannelPanel(false)} />
+          )}
+          {showAgentsPanel && (
+            <AgentsPanel
+              highlightId={agentsPanelRequest?.highlightId}
+              onClose={() => {
+                setShowAgentsPanel(false);
+                dismissAgentsPanel();
+              }}
+            />
+          )}
+          {showSettingsDialog && (
+            <GlobalSettingsDialog onClose={() => setShowSettingsDialog(false)} />
+          )}
+          {showUpdateDialog && versionInfo.latest && (
+            <UpdateDialog
+              latestVersion={versionInfo.latest}
+              installMode={versionInfo.installMode}
+              onClose={() => setShowUpdateDialog(false)}
+            />
+          )}
         </div>
       </I18nContext.Provider>
     </ThemeContext.Provider>
+  );
+}
+
+function MobileEmptyState() {
+  const { t } = useI18nContext();
+  return (
+    <div className="flex-1 flex items-center justify-center md:hidden px-4">
+      <div className="text-center text-on-surface-muted">
+        <p className="text-lg mb-2">{t('app.emptyStateTitle')}</p>
+        <p className="text-sm">{t('app.emptyStateHint')}</p>
+      </div>
+    </div>
   );
 }
 

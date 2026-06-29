@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -25,6 +25,29 @@ function getTerminalTheme(): { background: string; foreground: string; cursor: s
     foreground: style.getPropertyValue('--color-terminal-fg').trim() || '#e0e0e0',
     cursor: style.getPropertyValue('--color-terminal-cursor').trim() || '#4ade80',
   };
+}
+
+function CopyCommandButton({ sessionId }: { sessionId: string }) {
+  const [copied, setCopied] = useState(false);
+  const session = useLobbyStore((s) => s.sessions[sessionId]);
+  const resumeCommand = session?.resumeCommand;
+
+  if (!resumeCommand) return null;
+
+  return (
+    <div className="md:hidden absolute top-2 right-2 z-10">
+      <button
+        onClick={() => {
+          navigator.clipboard.writeText(resumeCommand);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+        className="text-xs px-2 py-1 rounded bg-surface-elevated text-on-surface-secondary hover:text-on-surface border border-outline transition-colors"
+      >
+        {copied ? 'Copied!' : 'Copy cmd'}
+      </button>
+    </div>
+  );
 }
 
 export default function TerminalView({ sessionId }: TerminalViewProps) {
@@ -102,10 +125,12 @@ export default function TerminalView({ sessionId }: TerminalViewProps) {
   }, [sessionId]);
 
   return (
-    <div
-      ref={containerRef}
-      className="flex-1 bg-[var(--color-terminal-bg)] overflow-hidden"
-      style={{ minHeight: 0 }}
-    />
+    <div className="flex-1 relative" style={{ minHeight: 0 }}>
+      <CopyCommandButton sessionId={sessionId} />
+      <div
+        ref={containerRef}
+        className="absolute inset-0 bg-[var(--color-terminal-bg)] overflow-hidden"
+      />
+    </div>
   );
 }
