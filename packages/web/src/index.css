@@ -192,3 +192,48 @@
 .markdown-body pre {
   margin: 0.5em 0;
 }
+
+/* Mobile adaptation: begin */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.h-dvh-fallback {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.tap-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+:root {
+  --mobile-nav-height: 56px;
+}
+
+.drawer-backdrop {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 300ms ease;
+}
+.drawer-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.drawer-panel {
+  transform: translateX(-100%);
+  transition: transform 300ms ease;
+}
+.drawer-panel.open {
+  transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-backdrop,
+  .drawer-panel {
+    transition: none;
+  }
+}
+/* Mobile adaptation: end */

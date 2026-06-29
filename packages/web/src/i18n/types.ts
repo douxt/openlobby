@@ -234,6 +234,10 @@ export interface Messages {
   'channelManage.conflict.body': string;
   'channelManage.conflict.dismiss': string;
 
+  'nav.sessions': string;
+  'nav.agents': string;
+  'nav.channels': string;
+
   'sidebar.agents': string;
   'sidebar.agent.badgeTitle': string;
   'sidebar.agent.label': string;
