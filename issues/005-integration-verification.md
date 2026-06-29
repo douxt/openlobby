@@ -2,7 +2,7 @@
 type: HITL
 estimate: 0.5d
 effort: small
-status: backlog
+status: ready
 blocked_by: ["004"]
 needs_llm: false
 needs_vision: false
