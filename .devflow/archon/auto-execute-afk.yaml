@@ -125,7 +125,7 @@ nodes:
     bash: |
       ISSUE_FILE="$ARGUMENTS"
       BRANCH=$(git rev-parse --abbrev-ref HEAD)
-      PR_URL=$(grep -oP 'PR_URL:\s*\Khttps://[^\s]+' "archon_output.log" 2>/dev/null || echo "")
+      PR_URL=$(gh pr list --head "$BRANCH" --state open --json url --jq '.[0].url' 2>/dev/null || echo "")
       if [ -n "$PR_URL" ]; then
         if grep -q '^pr:' "$ISSUE_FILE"; then
           sed -i "s|^pr:.*|pr: [\"$PR_URL\"]|" "$ISSUE_FILE"
@@ -137,17 +137,20 @@ nodes:
       git add "$ISSUE_FILE" 2>/dev/null
       git commit -m "review: $(basename "$ISSUE_FILE" .md) — 待审批" 2>/dev/null || true
       git push -u origin "$BRANCH" 2>/dev/null || true
+      git stash push -m "mark-in-review-auto" --quiet 2>/dev/null || true
       for i in 1 2 3; do
-        if git pull --rebase --quiet && git push --quiet; then exit 0; fi
+        if git pull --rebase --quiet && git push --quiet; then break; fi
         sleep $((i * 5))
       done
+      git stash pop --quiet 2>/dev/null || true
       exit 0
 
   - id: auto-merge
     depends_on: [mark-in-review]
     bash: |
       set -euo pipefail
-      PR_URL=$(grep -oP 'PR_URL:\s*\Khttps://[^\s]+' "archon_output.log" 2>/dev/null || echo "")
+      BRANCH=$(git rev-parse --abbrev-ref HEAD)
+      PR_URL=$(gh pr list --head "$BRANCH" --repo douxt/openlobby --state open --json url --jq '.[0].url' 2>/dev/null || echo "")
       if [ -z "$PR_URL" ]; then
         echo "AUTO_MERGE_SKIP: no PR URL"
         exit 0
@@ -173,8 +176,10 @@ nodes:
       sed -i 's/^status: in_review$/status: done/' "$ISSUE_FILE"
       git add "$ISSUE_FILE" 2>/dev/null
       git commit -m "done: $(basename "$ISSUE_FILE" .md) — auto-merged" 2>/dev/null || true
+      git stash push -m "auto-merge-auto" --quiet 2>/dev/null || true
       git pull --rebase --quiet 2>/dev/null || true
       git push 2>/dev/null || true
+      git stash pop --quiet 2>/dev/null || true
       echo "AUTO_MERGE_DONE: $PR_URL"
 
   - id: write-summary
