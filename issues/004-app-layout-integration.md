@@ -3,7 +3,8 @@ pr: ["https://github.com/douxt/openlobby/pull/26"]
 type: AFK
 estimate: 1d
 effort: small
-status: ready
+status: done
+pr: ["https://github.com/douxt/openlobby/pull/26"]
 blocked_by: ["002", "003"]
 needs_llm: false
 needs_vision: false
