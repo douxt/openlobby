@@ -2,7 +2,8 @@
 type: AFK
 estimate: 0.75d
 effort: small
-status: in_review
+status: done
+pr: ["https://github.com/douxt/openlobby/pull/18"]
 blocked_by: ["001"]
 needs_llm: false
 needs_vision: false
