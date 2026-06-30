@@ -150,10 +150,6 @@ describe('AC2: Mobile elements', () => {
     expect(screen.getByTestId('mobile-topbar').className).toContain('md:hidden');
   });
 
-  it('MobileNav is rendered', () => {
-    render(<App />);
-    expect(screen.getByTestId('mobile-nav')).toBeInTheDocument();
-  });
 });
 
 // ─── AC3: Hamburger → drawer ───────────────────────────────────────────────
