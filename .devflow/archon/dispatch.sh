@@ -27,7 +27,7 @@ fi
 cd "$WORKSPACE"
 
 # 防重叠：同一秒内禁止并发 dispatch（timer 每 1min 触发，55s 窗口防撞）
-LOCKFILE="/tmp/dispatch-openlobby.lock"
+LOCKFILE="$WORKSPACE/.dispatch.lock"
 if [ -f "$LOCKFILE" ]; then
   AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0) ))
   if [ "$AGE" -lt 55 ]; then
