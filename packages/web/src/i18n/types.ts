@@ -41,6 +41,7 @@ export interface Messages {
   'app.emptyStateTitle': string;
   'app.emptyStateHint': string;
   'app.sessionEndedHint': string;
+  'app.mobileEmptyHint': string;
 
   'sidebar.importCliSessions': string;
   'sidebar.empty': string;
@@ -233,10 +234,6 @@ export interface Messages {
   'channelManage.conflict.title': string;
   'channelManage.conflict.body': string;
   'channelManage.conflict.dismiss': string;
-
-  'nav.sessions': string;
-  'nav.agents': string;
-  'nav.channels': string;
 
   'sidebar.agents': string;
   'sidebar.agent.badgeTitle': string;
