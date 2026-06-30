@@ -54,6 +54,77 @@ backlog → ready → in_progress → done
 | Issue 目录 | `issues/` |
 | 调度日志 | `logs/dispatch.log` |
 
+
+<!-- ⚠️ 以下由 ai-dev-flow-server v2.1 自动追加 -->
+## Agent B 权限边界
+
+Agent B（本地 Claude Code）的权限按仓库区分：
+
+| 仓库类型 | 能干什么 | 不能干什么 |
+|---------|---------|-----------|
+| **业务项目**（openlobby 等） | commit、push、开 PR、**合并 PR 到 main**（人审后由 B 执行 merge） | 直推 main |
+| **管线框架**（devflow-src） | 只能读 | **禁止 commit、禁止 push、禁止 merge** |
+| **管线文件**（.devflow/、CLAUDE.md） | 只能读 | 修改需写 `_handoff/outbox/agent-b/` 委托 Agent A |
+
+Agent B 在业务项目里拥有完整开发权限——写代码、开 PR、人审后**由 B 执行合并**。Agent B 在管线框架里是只读用户——要改管线配置就走 handoff 委托。
+
+## 计划文件管理（防覆盖）
+
+- 每次新计划创建新文件，文件名含日期+主题，禁止覆盖已有计划文件
+- 计划执行完毕后，关键设计决策（权限边界、接口约束、架构取舍、被拒绝的方案）必须提取为 ADR
+- ADR 存放：项目有 `docs/decisions/` 则写项目，否则写 `~/.claude/plans/decisions/`
+- 旧计划文件保留不删；计划只存执行步骤，不可变决策回流正式文档
+
+### ADR 格式
+
+```markdown
+# ADR-NNN: <标题>
+## 状态：已采纳 / 已废弃
+## 日期：YYYY-MM-DD
+## 背景
+## 决策
+## 后果
+## 拒绝的方案
+```
+<!-- ai-dev-flow-server end -->
+<!-- ai-dev-flow-server end -->
+
+<!-- ⚠️ 以下由 ai-dev-flow-server 自动追加 -->
+## Agent B 行为边界（硬性，不可绕过）
+
+### 代码修改范围
+- 只能修改业务功能代码（src/、lib/、app/ 等业务目录）
+- 禁止修改：.devflow/、.github/workflows/、Makefile、Dockerfile、docker-compose*.yml、systemd unit 文件、nginx/Apache/Caddy 配置、部署脚本、CI/CD 配置、密钥文件
+- 禁止修改 CLAUDE.md 中 `## Agent B 行为边界` 及 `## 项目壁垒` 两个章节
+
+### 工作区规则（替代 worktree 隔离）
+- 无 shell 无法创建 worktree → **分支即隔离**
+- 必须在 `ai/` 分支上工作，禁止直接在 master/main 上修改文件
+- 开始工作前：`git checkout -b ai/<###>-<desc>`（从 master 最新切出）
+- 多任务并发时，不同 issue 用不同 `ai/` 分支，不可混在一个分支
+
+### Git 操作约束
+- 禁止 `git push` 到 `master` 或 `main` 分支（会被 pre-push hook 拦截）
+- 禁止创建不以 `ai/` 开头的分支
+- 禁止 `git merge`、`git rebase` master/main 到自己的分支（只能 A 做）
+- 禁止 `git push --force`、`git commit --amend` 在已推送分支
+- 所有代码变更走 `ai/<###>-<desc>` 分支 → push → 写 handoff 委托 A 审阅合并
+
+### 基础设施操作
+- 禁止执行：systemctl、docker、kubectl、nginx -s、pm2、supervisorctl
+- 禁止读 /etc/ 下的非本项目配置文件
+- 需基础设施操作时 → 写 _handoff/outbox/agent-b/ 委托 A
+
+### 遇阻协议
+- 碰到上述任一禁止操作时 → 不尝试绕过 → 写 handoff 委托 A
+- 不确定某操作是否被允许 → 读 CLAUDE.md 本段确认 → 不在列表则不允许
+- 连续 3 次因边界限制无法继续 → 标记 issue 为 blocked，写 handoff 说明原因
+
+### Agent 协作通道
+- 写委托: _handoff/outbox/agent-b/
+- 读回复: _handoff/inbox/agent-b/
+- 消息模板: _handoff/TEMPLATE.md
+
 <!-- ⚠️ 以下由 ai-dev-flow-server v2.1 自动追加 -->
 ## Agent B 权限边界
 

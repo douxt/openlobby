@@ -26,6 +26,18 @@ fi
 
 cd "$WORKSPACE"
 
+# 防重叠：同一秒内禁止并发 dispatch（timer 每 1min 触发，55s 窗口防撞）
+LOCKFILE="/tmp/dispatch-openlobby.lock"
+if [ -f "$LOCKFILE" ]; then
+  AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0) ))
+  if [ "$AGE" -lt 55 ]; then
+    log "SKIP: 上次 dispatch 距今 ${AGE}s（<55s），跳过"
+    exit 0
+  fi
+  rm -f "$LOCKFILE"
+fi
+touch "$LOCKFILE"
+
 # stash + ARCHON_OUT 统一清理（EXIT trap 覆盖所有退出路径）
 cleanup_exit() { git stash pop --quiet 2>/dev/null || true; rm -f "$ARCHON_OUT" 2>/dev/null || true; }
 ARCHON_OUT=""

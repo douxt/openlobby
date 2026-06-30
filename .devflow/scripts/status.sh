@@ -50,7 +50,7 @@ echo -e "│ Gates: $GATES                                   │"
 
 # ── Issues ──
 echo -e "├─ Issues ───────────────────────────────────────────────┤"
-for f in "$ISSUES_DIR"/0*.md; do
+for f in "$ISSUES_DIR"/[0-9][0-9][0-9]-*.md; do
     [ -f "$f" ] || continue
     BASENAME=$(basename "$f")
     NUM=$(echo "$BASENAME" | cut -d- -f1)
