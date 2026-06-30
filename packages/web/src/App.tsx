@@ -12,7 +12,6 @@ import MessageList from './components/MessageList';
 import MessageInput from './components/MessageInput';
 import TerminalView from './components/TerminalView';
 import { MobileDrawer } from './components/MobileDrawer';
-import { MobileNav } from './components/MobileNav';
 import DiscoverDialog from './components/DiscoverDialog';
 import ChannelManagePanel from './components/ChannelManagePanel';
 import AgentsPanel from './components/AgentsPanel';
@@ -106,7 +105,7 @@ export default function App() {
             <Sidebar onSessionSelect={handleCloseDrawer} />
           </MobileDrawer>
 
-          <main className="flex-1 flex flex-col min-w-0 pb-mobile-nav md:pb-0">
+          <main className="flex-1 flex flex-col min-w-0">
             {/* AC2: Mobile top bar with hamburger */}
             <div data-testid="mobile-topbar" className="md:hidden flex items-center gap-2 px-4 py-2 border-b border-outline bg-surface-secondary">
               <button
@@ -168,8 +167,6 @@ export default function App() {
             )}
           </main>
 
-          {/* AC2: Mobile bottom navigation */}
-          <MobileNav />
 
           {/* AC7: 5 dialogs lifted from Sidebar to App.tsx */}
           {showDiscoverDialog && (
