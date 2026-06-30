@@ -39,10 +39,7 @@ export const zhCNMessages = {
   'app.emptyStateTitle': '选择一个会话或创建新会话',
   'app.emptyStateHint': '点击侧边栏中的“+ 导入”开始',
   'app.sessionEndedHint': '会话已结束。创建或导入一个会话以继续。',
-
-  'nav.sessions': '会话',
-  'nav.agents': '代理',
-  'nav.channels': '渠道',
+  'app.mobileEmptyHint': '打开抽屉管理会话。',
 
   'sidebar.importCliSessions': '导入 CLI 会话',
   'sidebar.empty': '还没有会话。点击“+ 导入”创建一个。',

@@ -137,7 +137,7 @@ describe('AC1: Desktop sidebar', () => {
   });
 });
 
-// ─── AC2: Mobile hamburger visible, MobileNav visible ───────────────────────
+// ─── AC2: Mobile hamburger visible ──────────────────────────────────────────
 
 describe('AC2: Mobile elements', () => {
   it('hamburger button is present', () => {
@@ -148,11 +148,6 @@ describe('AC2: Mobile elements', () => {
   it('mobile top bar has md:hidden', () => {
     render(<App />);
     expect(screen.getByTestId('mobile-topbar').className).toContain('md:hidden');
-  });
-
-  it('MobileNav is rendered', () => {
-    render(<App />);
-    expect(screen.getByTestId('mobile-nav')).toBeInTheDocument();
   });
 });
 

@@ -12,7 +12,6 @@ import MessageList from './components/MessageList';
 import MessageInput from './components/MessageInput';
 import TerminalView from './components/TerminalView';
 import { MobileDrawer } from './components/MobileDrawer';
-import { MobileNav } from './components/MobileNav';
 import DiscoverDialog from './components/DiscoverDialog';
 import ChannelManagePanel from './components/ChannelManagePanel';
 import AgentsPanel from './components/AgentsPanel';
@@ -167,9 +166,6 @@ export default function App() {
               </div>
             )}
           </main>
-
-          {/* AC2: Mobile bottom navigation */}
-          <MobileNav />
 
           {/* AC7: 5 dialogs lifted from Sidebar to App.tsx */}
           {showDiscoverDialog && (
