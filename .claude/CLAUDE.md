@@ -54,7 +54,10 @@ backlog → ready → in_progress → done
 | Issue 目录 | `issues/` |
 | 调度日志 | `logs/dispatch.log` |
 
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
 <!-- ⚠️ 以下由 ai-dev-flow-server v2.1 自动追加 -->
 ## Agent B 权限边界
 
