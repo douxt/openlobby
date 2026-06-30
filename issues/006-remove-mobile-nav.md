@@ -1,4 +1,5 @@
 ---
+pr: ["https://github.com/douxt/openlobby/pull/28"]
 type: AFK
 estimate: 0.25d
 effort: small
@@ -12,6 +13,7 @@ test_files:
   - packages/web/src/components/__tests__/MobileDrawer.test.tsx
   - packages/web/src/stores/__tests__/lobby-store.test.ts
 ---
+pr: ["https://github.com/douxt/openlobby/pull/28"]
 
 # #006 — 移除 MobileNav 底部导航栏
 
