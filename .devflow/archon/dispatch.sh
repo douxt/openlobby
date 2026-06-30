@@ -26,17 +26,19 @@ fi
 
 cd "$WORKSPACE"
 
-# 防重叠：同一秒内禁止并发 dispatch（timer 每 1min 触发，55s 窗口防撞）
-LOCKFILE="$WORKSPACE/.dispatch.lock"
-if [ -f "$LOCKFILE" ]; then
-  AGE=$(( $(date +%s) - $(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0) ))
+# 防重叠：mkdir 原子锁（timer 每 1min 触发，55s 窗口防撞）
+LOCKDIR="$WORKSPACE/.dispatch.lock"
+if ! mkdir "$LOCKDIR" 2>/dev/null; then
+  CTIME=$(stat -c %Y "$LOCKDIR" 2>/dev/null || echo 0)
+  AGE=$(( $(date +%s) - CTIME ))
   if [ "$AGE" -lt 55 ]; then
     log "SKIP: 上次 dispatch 距今 ${AGE}s（<55s），跳过"
     exit 0
   fi
-  rm -f "$LOCKFILE"
+  rmdir "$LOCKDIR" 2>/dev/null || true
+  mkdir "$LOCKDIR" 2>/dev/null || { log "SKIP: 无法获取锁"; exit 0; }
 fi
-touch "$LOCKFILE"
+trap 'rmdir "$LOCKDIR" 2>/dev/null || true' EXIT
 
 # stash + ARCHON_OUT 统一清理（EXIT trap 覆盖所有退出路径）
 cleanup_exit() { git stash pop --quiet 2>/dev/null || true; rm -f "$ARCHON_OUT" 2>/dev/null || true; }
