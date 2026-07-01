@@ -24,20 +24,9 @@ if [ ! -f "$CONFIG" ]; then
     exit 1
 fi
 
-cd "$WORKSPACE"
-
-# 防重叠：mkdir 原子锁（timer 每 1min 触发，55s 窗口防撞）
+# 原子锁（防并发 dispatch）
 LOCKDIR="$WORKSPACE/.dispatch.lock"
-if ! mkdir "$LOCKDIR" 2>/dev/null; then
-  CTIME=$(stat -c %Y "$LOCKDIR" 2>/dev/null || echo 0)
-  AGE=$(( $(date +%s) - CTIME ))
-  if [ "$AGE" -lt 55 ]; then
-    log "SKIP: 上次 dispatch 距今 ${AGE}s（<55s），跳过"
-    exit 0
-  fi
-  rmdir "$LOCKDIR" 2>/dev/null || true
-  mkdir "$LOCKDIR" 2>/dev/null || { log "SKIP: 无法获取锁"; exit 0; }
-fi
+mkdir "$LOCKDIR" 2>/dev/null || { log "SKIP: 已有 dispatch 在运行"; exit 0; }
 
 # 统一清理（lock + worktree + ARCHON_OUT，覆盖所有退出路径）
 cleanup_exit() {
@@ -55,7 +44,7 @@ trap cleanup_exit EXIT INT TERM
 # git fetch 替代 git pull（worktree 从 origin/main 创建，无需本地 checkout main）
 FETCH_ERR=$(git fetch origin 2>&1 1>/dev/null) || {
     log "FATAL: git fetch 失败 — ${FETCH_ERR}"
-    python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null <<< "⛔ ${PROJECT_NAME}: git fetch 失败" || true
+    python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null <<< "⛔ git fetch 失败" || true
     exit 1
 }
 
@@ -66,11 +55,23 @@ DISPATCH_WT=$(mktemp -d /tmp/dispatch-XXXXXX) && rmdir "$DISPATCH_WT" || {
 }
 git worktree add "$DISPATCH_WT" origin/main --detach 2>/dev/null || {
     log "FATAL: worktree 创建失败"
-    python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null <<< "⛔ ${PROJECT_NAME}: worktree 创建失败" || true
+    python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null <<< "⛔ worktree 创建失败" || true
     exit 1
 }
 cd "$DISPATCH_WT"
 ISSUES_DIR="$DISPATCH_WT/issues"
+
+# Archon workspace 去冲突：dispatch 用临时 worktree，Archon 注册了旧路径 → 下次报错
+# 删除 stale source symlink，让 Archon 重新注册到当前 worktree 路径；结束后一并清理
+ARCHON_REMOTE=$(git -C "$WORKSPACE" remote get-url origin 2>/dev/null || true)
+if [ -n "$ARCHON_REMOTE" ]; then
+    ARCHON_USER=$(echo "$ARCHON_REMOTE" | grep -oP '(?<=:)[^/]+(?=/)' || true)
+    ARCHON_REPO=$(echo "$ARCHON_REMOTE" | grep -oP '[^/]+\.git$' | sed 's/\.git$//' || true)
+    if [ -n "$ARCHON_USER" ] && [ -n "$ARCHON_REPO" ]; then
+        ARCHON_WS="/home/www/.archon/workspaces/$ARCHON_USER/$ARCHON_REPO"
+        rm -f "$ARCHON_WS/source" 2>/dev/null || true
+    fi
+fi
 
 # index.lock 时效检测（防僵尸 lock 阻塞所有 git 操作）
 LOCK="$WORKSPACE/.git/index.lock"
@@ -98,7 +99,6 @@ if [ -d "$HANDOFF_DIR" ]; then
     if [ -n "$LATEST_MSG" ]; then
         MSG_MTIME=$(stat -c %Y "$LATEST_MSG" 2>/dev/null || echo 0)
         LAST_NOTIFY=$(cat "$HANDOFF_STAMP" 2>/dev/null || echo 0)
-        # 同一文件 30min 内不重复通知
         if [ "$(( $(date +%s) - LAST_NOTIFY ))" -gt 1800 ] || [ "$MSG_MTIME" -gt "$LAST_NOTIFY" ]; then
             MSG_ID=$(basename "$LATEST_MSG" .md)
             echo "📨 ${PROJECT_NAME}: B 有新委托 — ${MSG_ID}" | python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null || true
@@ -185,6 +185,7 @@ while [ $ATTEMPT -le $MAX_RETRIES ]; do
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - START_TIME))
 
+        # 标记完成：检查 archon 是否已 auto-merge 标 done
         git pull --rebase --quiet 2>/dev/null || true
         if grep -q '^status: done$' "$BEST_ISSUE" 2>/dev/null; then
             log "AUTO_MERGED: #${ISSUE_NUM} archon 已自动合并为 done"
@@ -195,8 +196,10 @@ while [ $ATTEMPT -le $MAX_RETRIES ]; do
             git push origin HEAD:main 2>/dev/null || log "WARN: push 失败"
         fi
 
+        # 成本追踪
         python3 "$SCRIPTS_DIR/cost_tracker.py" log --issue "${ISSUE_SLUG}" --status "in_review" --duration "$DURATION" --workflow "$ARCHON_WORKFLOW" --workspace "$WORKSPACE" 2>/dev/null || true
 
+        # 审批通知
         PR_URL=$(grep -oP 'pr:\s*\["?\Khttps://[^"\] ]+' "$BEST_ISSUE" 2>/dev/null | head -1 || echo "")
         FILES=$(git diff --name-only HEAD~1 2>/dev/null | head -20 | tr '\n' ',' | sed 's/,$//')
         python3 -c "
@@ -206,10 +209,12 @@ sys.stdout.write(json.dumps(payload))
 " | python3 "$SCRIPTS_DIR/notify.py" approve-request 2>/dev/null || log "WARN: notify 失败"
 
         archon isolation cleanup --merged 2>/dev/null || true
+        rm -f "$ARCHON_WS/source" 2>/dev/null || true
         rm -f "$ARCHON_OUT"
         log "IN_REVIEW: #${ISSUE_NUM} ${ISSUE_SLUG} (耗时 ${DURATION}s)"
         exit 0
     fi
+    # 失败：也捕获标记
     cat "$ARCHON_OUT" >> "$LOG_FILE" 2>/dev/null || true
     grep -E "##\[(AC_DONE|AC_EXISTS|AC_FAIL|IMPLEMENT_RESULT|AC_VERIFY_RESULT|HARD_GATE)\]" "$ARCHON_OUT" 2>/dev/null | while IFS= read -r marker; do
         log "ARCHON_NODE: $marker"
@@ -231,4 +236,5 @@ git push origin HEAD:main 2>/dev/null || log "WARN: failed push"
 python3 "$SCRIPTS_DIR/cost_tracker.py" log --issue "${ISSUE_SLUG}" --status "failed" --duration "$DURATION" --workflow "$ARCHON_WORKFLOW" --workspace "$WORKSPACE" 2>/dev/null || true
 echo "❌ ${PROJECT_NAME}: #${ISSUE_NUM} 执行失败（${MAX_RETRIES} 次重试，耗时 ${DURATION}s）" | python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null || true
 archon isolation cleanup --merged 2>/dev/null || true
+rm -f "$ARCHON_WS/source" 2>/dev/null || true
 exit 1
