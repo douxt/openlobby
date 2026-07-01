@@ -68,7 +68,7 @@ if [ -n "$ARCHON_REMOTE" ]; then
     ARCHON_USER=$(echo "$ARCHON_REMOTE" | grep -oP '(?<=:)[^/]+(?=/)' || true)
     ARCHON_REPO=$(echo "$ARCHON_REMOTE" | grep -oP '[^/]+\.git$' | sed 's/\.git$//' || true)
     if [ -n "$ARCHON_USER" ] && [ -n "$ARCHON_REPO" ]; then
-        ARCHON_WS="/home/www/.archon/workspaces/$ARCHON_USER/$ARCHON_REPO"
+        ARCHON_WS="$HOME/.archon/workspaces/$ARCHON_USER/$ARCHON_REPO"
         rm -f "$ARCHON_WS/source" 2>/dev/null || true
     fi
 fi
@@ -159,7 +159,7 @@ fi
 # 原子抢占（git push 竞态，先 push 者胜）
 sed -i "s/^status: ready$/status: in_progress/" "$BEST_ISSUE"
 git add "$BEST_ISSUE"
-git commit -m "dispatch: claim #${ISSUE_NUM} — ${ISSUE_SLUG}" 2>/dev/null || true
+git commit -m "dispatch: claim #${ISSUE_NUM} -- ${ISSUE_SLUG}" 2>/dev/null || true
 if ! git push origin HEAD:main 2>/dev/null; then
     sed -i "s/^status: in_progress$/status: ready/" "$BEST_ISSUE"
     git checkout -- "$BEST_ISSUE" 2>/dev/null || true
@@ -192,7 +192,7 @@ while [ $ATTEMPT -le $MAX_RETRIES ]; do
         else
             sed -i "s/^status: in_progress$/status: in_review/" "$BEST_ISSUE"
             git add "$BEST_ISSUE"
-            git commit -m "dispatch: review #${ISSUE_NUM} — ${ISSUE_SLUG} (待审批)" 2>/dev/null || true
+            git commit -m "dispatch: review #${ISSUE_NUM} -- ${ISSUE_SLUG} (待审批)" 2>/dev/null || true
             git push origin HEAD:main 2>/dev/null || log "WARN: push 失败"
         fi
 
@@ -231,7 +231,7 @@ log "UNRESOLVED: #${ISSUE_NUM} ${ISSUE_SLUG} — ${MAX_RETRIES} 次尝试均失�
 git pull --rebase --quiet 2>/dev/null || true
 sed -i "s/^status: in_progress$/status: failed/" "$BEST_ISSUE"
 git add "$BEST_ISSUE"
-git commit -m "dispatch: failed #${ISSUE_NUM} — ${ISSUE_SLUG}" 2>/dev/null || true
+git commit -m "dispatch: failed #${ISSUE_NUM} -- ${ISSUE_SLUG}" 2>/dev/null || true
 git push origin HEAD:main 2>/dev/null || log "WARN: failed push"
 python3 "$SCRIPTS_DIR/cost_tracker.py" log --issue "${ISSUE_SLUG}" --status "failed" --duration "$DURATION" --workflow "$ARCHON_WORKFLOW" --workspace "$WORKSPACE" 2>/dev/null || true
 echo "❌ ${PROJECT_NAME}: #${ISSUE_NUM} 执行失败（${MAX_RETRIES} 次重试，耗时 ${DURATION}s）" | python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null || true
