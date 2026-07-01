@@ -2,11 +2,11 @@
 # dispatch.sh — 通用 AFK 调度器（服务器版）
 # 由 systemd timer 每 5 分钟触发。从 .devflow/config.yaml 读项目配置。
 # 用法: bash dispatch.sh <项目路径>
+# 隔离策略: git worktree add origin/main --detach（替代旧版 stash 模式）
 set -euo pipefail
 
 WORKSPACE="${1:-$(pwd)}"
 DEVFLOW_DIR="$WORKSPACE/.devflow"
-ISSUES_DIR="$WORKSPACE/issues"
 CONFIG="$DEVFLOW_DIR/config.yaml"
 SCRIPTS_DIR="$DEVFLOW_DIR/scripts"
 ARCHON_DIR="$DEVFLOW_DIR/archon"
@@ -38,19 +38,42 @@ if ! mkdir "$LOCKDIR" 2>/dev/null; then
   rmdir "$LOCKDIR" 2>/dev/null || true
   mkdir "$LOCKDIR" 2>/dev/null || { log "SKIP: 无法获取锁"; exit 0; }
 fi
-trap 'rmdir "$LOCKDIR" 2>/dev/null || true' EXIT
 
-# stash + ARCHON_OUT 统一清理（EXIT trap 覆盖所有退出路径）
-cleanup_exit() { git stash pop --quiet 2>/dev/null || true; rm -f "$ARCHON_OUT" 2>/dev/null || true; }
+# 统一清理（lock + worktree + ARCHON_OUT，覆盖所有退出路径）
+cleanup_exit() {
+    rmdir "$LOCKDIR" 2>/dev/null || true
+    rm -f "$ARCHON_OUT" 2>/dev/null || true
+    if [ -n "${DISPATCH_WT:-}" ] && [ -d "$DISPATCH_WT" ]; then
+        cd "$WORKSPACE" 2>/dev/null || true
+        git worktree remove "$DISPATCH_WT" --force 2>/dev/null || true
+    fi
+    git worktree prune 2>/dev/null || true
+}
 ARCHON_OUT=""
-trap cleanup_exit EXIT
-git stash push -m "dispatch-$(date +%s)" --quiet 2>/dev/null || true
+trap cleanup_exit EXIT INT TERM
 
-# 确保在 main 分支上（防 B 切分支后忘切回导致 dispatch 跑偏）
-git checkout main 2>/dev/null || { echo "[$(date '+%Y-%m-%d %H:%M:%S')] FATAL: 无法切回 main" | tee -a logs/dispatch.log; exit 1; }
+# git fetch 替代 git pull（worktree 从 origin/main 创建，无需本地 checkout main）
+FETCH_ERR=$(git fetch origin 2>&1 1>/dev/null) || {
+    log "FATAL: git fetch 失败 — ${FETCH_ERR}"
+    python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null <<< "⛔ ${PROJECT_NAME}: git fetch 失败" || true
+    exit 1
+}
+
+# 创建临时 worktree（从 origin/main detached）
+DISPATCH_WT=$(mktemp -d /tmp/dispatch-XXXXXX) && rmdir "$DISPATCH_WT" || {
+    log "FATAL: 无法创建临时目录"
+    exit 1
+}
+git worktree add "$DISPATCH_WT" origin/main --detach 2>/dev/null || {
+    log "FATAL: worktree 创建失败"
+    python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null <<< "⛔ ${PROJECT_NAME}: worktree 创建失败" || true
+    exit 1
+}
+cd "$DISPATCH_WT"
+ISSUES_DIR="$DISPATCH_WT/issues"
 
 # index.lock 时效检测（防僵尸 lock 阻塞所有 git 操作）
-LOCK=".git/index.lock"
+LOCK="$WORKSPACE/.git/index.lock"
 if [ -f "$LOCK" ]; then
   AGE=$(( $(date +%s) - $(stat -c %Y "$LOCK" 2>/dev/null || echo 0) ))
   if [ "$AGE" -gt 300 ]; then
@@ -63,15 +86,11 @@ fi
 # 从 config.yaml 读取配置（简单 grep 解析，无 yq 依赖）
 PROJECT_NAME=$(grep -E '^\s+name:' "$CONFIG" | head -1 | awk '{print $2}' | tr -d '"'"'" || echo "unknown")
 BRANCH_PREFIX=$(grep -E '^\s+branch_prefix:' "$CONFIG" | head -1 | awk '{print $2}' | tr -d '"'"'" || echo "ai/")
-CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "main")
 
 log "--- dispatch 扫描: $PROJECT_NAME ---"
 
-# 同步远端（stash 已在 EXIT trap 中统一管理）
-git rebase --abort 2>/dev/null || true
-git pull --rebase --quiet 2>/dev/null || log "WARN: git pull 失败"
-
 # handoff 检测：outbox/agent-b/ 有新消息 → 通知人（30min 去重）
+# WORKSPACE 始终指向主工作树，不受 cd 到 worktree 影响
 HANDOFF_DIR="$WORKSPACE/_handoff/outbox/agent-b"
 HANDOFF_STAMP="$WORKSPACE/logs/.handoff_last_notify"
 if [ -d "$HANDOFF_DIR" ]; then
@@ -95,7 +114,6 @@ while IFS= read -r f; do
     [ -z "$f" ] && continue
     TYPE=$(grep "^type:" "$f" | awk '{print $2}' || true)
     [ "$TYPE" != "AFK" ] && continue
-    # 检查 blocked_by 是否全部 done
     BLOCKED_BY=$(grep "^blocked_by:" "$f" | grep -oP '\[.*?\]' | tr -d '[]' | tr ',' '\n' | sed 's/^ *"//;s/" *$//;s/^ *//;s/ *$//' | grep -v "^$" || true)
     DEPS_OK=true
     for dep in $BLOCKED_BY; do
@@ -113,7 +131,7 @@ fi
 
 ISSUE_NUM=$(basename "$BEST_ISSUE" | cut -d- -f1)
 ISSUE_SLUG=$(basename "$BEST_ISSUE" .md)
-ISSUE_PATH=$(realpath --relative-to="$WORKSPACE" "$BEST_ISSUE")
+ISSUE_PATH=$(realpath --relative-to="$DISPATCH_WT" "$BEST_ISSUE")
 log "DISPATCH: #${ISSUE_NUM} ${ISSUE_SLUG}"
 
 # 宪法前置检查
@@ -142,7 +160,7 @@ fi
 sed -i "s/^status: ready$/status: in_progress/" "$BEST_ISSUE"
 git add "$BEST_ISSUE"
 git commit -m "dispatch: claim #${ISSUE_NUM} — ${ISSUE_SLUG}" 2>/dev/null || true
-if ! git push 2>/dev/null; then
+if ! git push origin HEAD:main 2>/dev/null; then
     sed -i "s/^status: in_progress$/status: ready/" "$BEST_ISSUE"
     git checkout -- "$BEST_ISSUE" 2>/dev/null || true
     log "FAIL: 抢占失败，push 被拒绝"
@@ -158,19 +176,15 @@ START_TIME=$(date +%s)
 ATTEMPT=1
 while [ $ATTEMPT -le $MAX_RETRIES ]; do
     log "ARCHON: 尝试 #${ATTEMPT}/${MAX_RETRIES}"
-    # 用临时文件捕获 Archon 输出，提取结构化标记
     ARCHON_OUT=$(mktemp)
-    if archon workflow run "$ARCHON_WORKFLOW" "$ISSUE_PATH" --from "$CURRENT_BRANCH" > "$ARCHON_OUT" 2>&1; then
-        # 追加完整输出到主日志
+    if archon workflow run "$ARCHON_WORKFLOW" "$ISSUE_PATH" --from main > "$ARCHON_OUT" 2>&1; then
         cat "$ARCHON_OUT" >> "$LOG_FILE"
-        # 提取关键节点标记
         grep -E "##\[(AC_DONE|AC_EXISTS|AC_FAIL|IMPLEMENT_RESULT|AC_VERIFY_RESULT|HARD_GATE)\]" "$ARCHON_OUT" 2>/dev/null | while IFS= read -r marker; do
             log "ARCHON_NODE: $marker"
         done || true
         END_TIME=$(date +%s)
         DURATION=$((END_TIME - START_TIME))
 
-        # 标记完成：检查 archon 是否已 auto-merge 标 done
         git pull --rebase --quiet 2>/dev/null || true
         if grep -q '^status: done$' "$BEST_ISSUE" 2>/dev/null; then
             log "AUTO_MERGED: #${ISSUE_NUM} archon 已自动合并为 done"
@@ -178,13 +192,11 @@ while [ $ATTEMPT -le $MAX_RETRIES ]; do
             sed -i "s/^status: in_progress$/status: in_review/" "$BEST_ISSUE"
             git add "$BEST_ISSUE"
             git commit -m "dispatch: review #${ISSUE_NUM} — ${ISSUE_SLUG} (待审批)" 2>/dev/null || true
-            git push 2>/dev/null || log "WARN: push 失败"
+            git push origin HEAD:main 2>/dev/null || log "WARN: push 失败"
         fi
 
-        # 成本追踪
         python3 "$SCRIPTS_DIR/cost_tracker.py" log --issue "${ISSUE_SLUG}" --status "in_review" --duration "$DURATION" --workflow "$ARCHON_WORKFLOW" --workspace "$WORKSPACE" 2>/dev/null || true
 
-        # 审批通知
         PR_URL=$(grep -oP 'pr:\s*\["?\Khttps://[^"\] ]+' "$BEST_ISSUE" 2>/dev/null | head -1 || echo "")
         FILES=$(git diff --name-only HEAD~1 2>/dev/null | head -20 | tr '\n' ',' | sed 's/,$//')
         python3 -c "
@@ -198,7 +210,6 @@ sys.stdout.write(json.dumps(payload))
         log "IN_REVIEW: #${ISSUE_NUM} ${ISSUE_SLUG} (耗时 ${DURATION}s)"
         exit 0
     fi
-    # 失败：也捕获标记
     cat "$ARCHON_OUT" >> "$LOG_FILE" 2>/dev/null || true
     grep -E "##\[(AC_DONE|AC_EXISTS|AC_FAIL|IMPLEMENT_RESULT|AC_VERIFY_RESULT|HARD_GATE)\]" "$ARCHON_OUT" 2>/dev/null | while IFS= read -r marker; do
         log "ARCHON_NODE: $marker"
@@ -216,7 +227,7 @@ git pull --rebase --quiet 2>/dev/null || true
 sed -i "s/^status: in_progress$/status: failed/" "$BEST_ISSUE"
 git add "$BEST_ISSUE"
 git commit -m "dispatch: failed #${ISSUE_NUM} — ${ISSUE_SLUG}" 2>/dev/null || true
-git push 2>/dev/null || log "WARN: failed push"
+git push origin HEAD:main 2>/dev/null || log "WARN: failed push"
 python3 "$SCRIPTS_DIR/cost_tracker.py" log --issue "${ISSUE_SLUG}" --status "failed" --duration "$DURATION" --workflow "$ARCHON_WORKFLOW" --workspace "$WORKSPACE" 2>/dev/null || true
 echo "❌ ${PROJECT_NAME}: #${ISSUE_NUM} 执行失败（${MAX_RETRIES} 次重试，耗时 ${DURATION}s）" | python3 "$SCRIPTS_DIR/notify.py" status 2>/dev/null || true
 archon isolation cleanup --merged 2>/dev/null || true
