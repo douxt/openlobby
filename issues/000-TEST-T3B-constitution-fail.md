@@ -2,7 +2,7 @@
 type: AFK
 estimate: 0.5d
 effort: large
-status: ready
+status: failed
 blocked_by: []
 needs_llm: true
 needs_vision: false
