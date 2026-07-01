@@ -1,9 +1,9 @@
 ---
-pr: ["https://github.com/douxt/openlobby/pull/30"]
+pr: ["https://github.com/douxt/openlobby/pull/31"]
 type: AFK
 estimate: 0.5d
 effort: small
-status: in_review
+status: done
 blocked_by: []
 needs_llm: true
 needs_vision: false
@@ -11,7 +11,7 @@ needs_pdf: false
 needs_docker: false
 test_files: ["tests/test_mock.py"]
 ---
-pr: ["https://github.com/douxt/openlobby/pull/30"]
+pr: ["https://github.com/douxt/openlobby/pull/31"]
 
 # TEST-T1: 全流程冒烟测试
 
