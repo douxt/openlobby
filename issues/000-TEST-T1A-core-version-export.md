@@ -8,7 +8,7 @@ needs_llm: false
 needs_vision: false
 needs_pdf: false
 needs_docker: false
-test_files: []
+test_files: ["packages/core/src/index.ts", "packages/cli/src/bin.ts"]
 ---
 
 # TEST-T1A: core 包导出 VERSION 常量

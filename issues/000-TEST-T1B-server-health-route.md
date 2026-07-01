@@ -8,7 +8,7 @@ needs_llm: false
 needs_vision: false
 needs_pdf: false
 needs_docker: false
-test_files: []
+test_files: ["packages/core/src/index.ts", "packages/cli/src/bin.ts"]
 ---
 
 # TEST-T1B: server 包添加健康检查路由
