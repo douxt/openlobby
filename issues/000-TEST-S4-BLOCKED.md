@@ -2,7 +2,7 @@
 type: AFK
 estimate: 0.5d
 effort: small
-status: backlog
+status: ready
 blocked_by: ["000-TEST-S4-DEP-DONE"]
 needs_llm: false
 needs_vision: false
