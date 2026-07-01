@@ -1,4 +1,5 @@
 ---
+pr: ["https://github.com/douxt/openlobby/pull/32"]
 type: AFK
 estimate: 0.5d
 effort: small
@@ -10,6 +11,7 @@ needs_pdf: false
 needs_docker: false
 test_files: ["tests/test_real_code_change.py"]
 ---
+pr: ["https://github.com/douxt/openlobby/pull/32"]
 
 # TEST: 修改 .devflow/config.yaml name 字段
 
